@@ -4,8 +4,11 @@
 #include <rex/logging.h>
 #include <rex/version.h>
 
+#include <rex/runtime.h>
+
 #include "bdengine/common/logging.h"
 #include "bdengine/common/threading.h"
+#include "bdengine/fs/ramdisk_device.h"
 #include "generated/reblue_init.h"
 #include "ui/installer_wizard.h"
 #include "ui/message_box.h"
@@ -128,6 +131,7 @@ void ReblueApp::FinishInstaller(rex::PathConfig defaults,
 
 void ReblueApp::OnPreLaunchModule() {
   bd::EnableHighResTimer();
+  bd::fs::MountRamdisk(rex::Runtime::instance()->file_system());
 }
 
 void ReblueApp::OnShutdown() {

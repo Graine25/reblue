@@ -30,6 +30,9 @@ set(REBLUE_SOURCES
     src/bdengine/config/config_menu.cpp
     src/bdengine/config/config_menu_data.cpp
 
+    # filesystem (ramdisk for cache:\)
+    src/bdengine/fs/ramdisk_device.cpp
+
     # mods and DLC
     src/bdengine/mods/dlc_manager.cpp
     src/bdengine/mods/mod_manager.cpp

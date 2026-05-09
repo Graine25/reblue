@@ -184,9 +184,10 @@ bool RamdiskEntry::DeleteEntryInternal(rex::filesystem::Entry* entry) {
   return true;
 }
 
-void RamdiskEntry::RenameEntryInternal(const std::vector<std::string_view>& path_parts) {
+X_STATUS RamdiskEntry::RenameEntryInternal(const std::vector<std::string_view>& path_parts) {
   // Names are tracked by the base Entry; nothing extra to update for ramdisk.
   (void)path_parts;
+  return X_STATUS_SUCCESS;
 }
 
 RamdiskDevice::RamdiskDevice(const std::string_view mount_path)

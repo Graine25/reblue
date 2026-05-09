@@ -326,7 +326,7 @@ void detail_RegisterAllScreens(PPCContext& ctx, u8* base) {
         }
         s_slots[i] = screen;
 
-        u32 factoryAddr = dispatcher->AllocateThunk(s_trampolines[i]);
+        u32 factoryAddr = dispatcher->AllocateThunk(s_trampolines[i], ctx.lr);
         if (!factoryAddr) {
             BD_ERROR("[d2anime] AllocateThunk failed for '{}'", screen->name_);
             continue;

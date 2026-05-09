@@ -1,0 +1,15 @@
+[project]
+sdk_version = "0.8.0.36"
+name = "reblue"
+
+[entrypoint]
+file_path = "assets/default.xex"
+out_directory_path = "generated"
+includes = [
+  "config/functions.toml",
+  "config/hooks.toml",
+]
+
+setjmp_address = 0x826C5D00
+longjmp_address = 0x826C5AB0
+

@@ -13,35 +13,35 @@
 #include "ui/installer_wizard.h"
 #include "ui/message_box.h"
 
-REXCVAR_DECLARE(std::string, game_data_root);
-REXCVAR_DECLARE(std::string, cache_path);
-REXCVAR_DEFINE_BOOL(no_installer, false, "reblue",
-                    "Skip the first-run installer; error out if no install is configured");
+REXCVAR_DEFINE_BOOL(
+    no_installer, false, "reblue",
+    "Skip the first-run installer; error out if no install is configured");
 
-std::unique_ptr<rex::ui::WindowedApp> ReblueApp::Create(rex::ui::WindowedAppContext& ctx) {
+std::unique_ptr<rex::ui::WindowedApp>
+ReblueApp::Create(rex::ui::WindowedAppContext &ctx) {
   return std::unique_ptr<ReblueApp>(new ReblueApp(ctx));
 }
 
-ReblueApp::ReblueApp(rex::ui::WindowedAppContext& ctx)
+ReblueApp::ReblueApp(rex::ui::WindowedAppContext &ctx)
     : rex::ReXApp(ctx, "reblue", PPCImageConfig) {}
 
 ReblueApp::~ReblueApp() = default;
 
-void ReblueApp::OnConfigureFonts(ImFontAtlas* atlas) {
+void ReblueApp::OnConfigureFonts(ImFontAtlas *atlas) {
   reblue::ui::InitInstallerFonts(atlas);
 }
 
-void ReblueApp::OnCreateDialogs(rex::ui::ImGuiDrawer*) {
+void ReblueApp::OnCreateDialogs(rex::ui::ImGuiDrawer *) {
   window()->SetTitle(std::string("re:Blue ") + REXGLUE_BUILD_TITLE);
 }
 
-std::optional<rex::PathConfig> ReblueApp::OnFinalizePaths(
-    const rex::PathConfig& defaults,
-    std::function<void(rex::PathConfig)> resume) {
+std::optional<rex::PathConfig>
+ReblueApp::OnFinalizePaths(const rex::PathConfig &defaults,
+                           std::function<void(rex::PathConfig)> resume) {
   // The SDK has already applied --game_data_root / positional game_directory
   // into defaults.game_data_root. Detect whether the user supplied either.
-  const bool user_supplied_path =
-      GetArgument("game_directory").has_value() || !REXCVAR_GET(game_data_root).empty();
+  const bool user_supplied_path = GetArgument("game_directory").has_value() ||
+                                  !REXCVAR_GET(game_data_root).empty();
 
   if (user_supplied_path) {
     if (!std::filesystem::exists(defaults.game_data_root / "default.xex")) {
@@ -57,12 +57,12 @@ std::optional<rex::PathConfig> ReblueApp::OnFinalizePaths(
     return defaults;
   }
 
-  auto apply_install = [&](const reblue::InstallConfig& cfg) {
+  auto apply_install = [&](const reblue::InstallConfig &cfg) {
     rex::PathConfig paths = defaults;
     paths.game_data_root = cfg.game_data_path();
     paths.user_data_root = cfg.user_data_path();
     // Cache follows user_data unless the user pinned it via cvar.
-    if (REXCVAR_GET(cache_path).empty()) {
+    if (REXCVAR_GET(cache_root).empty()) {
       paths.cache_root = paths.user_data_root / "cache";
     }
     return paths;
@@ -83,7 +83,8 @@ std::optional<rex::PathConfig> ReblueApp::OnFinalizePaths(
     reblue::ui::ShowFatalError(
         "reblue - game not installed",
         "Game not installed. Either run without --no-installer to launch the "
-        "installer, or pass the installed game directory as the first argument.");
+        "installer, or pass the installed game directory as the first "
+        "argument.");
     app_context().QuitFromUIThread();
     return std::nullopt;
   }
@@ -92,9 +93,9 @@ std::optional<rex::PathConfig> ReblueApp::OnFinalizePaths(
   // either finishes the install or cancels.
   const auto default_install_dir = defaults.config_path.parent_path() / "data";
   installer_wizard_ = std::make_unique<reblue::ui::InstallerWizard>(
-      imgui_drawer(), immediate_drawer(), app_context(),
-      default_install_dir,
-      [this, defaults, resume](bool completed, const reblue::InstallConfig& cfg) {
+      imgui_drawer(), immediate_drawer(), app_context(), default_install_dir,
+      [this, defaults, resume](bool completed,
+                               const reblue::InstallConfig &cfg) {
         FinishInstaller(defaults, resume, completed, cfg);
       });
 
@@ -104,7 +105,7 @@ std::optional<rex::PathConfig> ReblueApp::OnFinalizePaths(
 void ReblueApp::FinishInstaller(rex::PathConfig defaults,
                                 std::function<void(rex::PathConfig)> resume,
                                 bool completed,
-                                const reblue::InstallConfig& cfg) {
+                                const reblue::InstallConfig &cfg) {
   installer_wizard_.reset();
 
   if (!completed) {
@@ -123,7 +124,7 @@ void ReblueApp::FinishInstaller(rex::PathConfig defaults,
   rex::PathConfig paths = defaults;
   paths.game_data_root = cfg.game_data_path();
   paths.user_data_root = cfg.user_data_path();
-  if (REXCVAR_GET(cache_path).empty()) {
+  if (REXCVAR_GET(cache_root).empty()) {
     paths.cache_root = paths.user_data_root / "cache";
   }
   resume(std::move(paths));

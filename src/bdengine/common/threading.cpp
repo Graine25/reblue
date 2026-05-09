@@ -77,7 +77,7 @@ u32 Sleep_hook(u32 ms) {
 
     return 0;
 }
-PPC_HOOK(rex_Sleep, Sleep_hook);
+REX_HOOK(rex_Sleep, Sleep_hook);
 
 /**
  * @brief NtSuspendThread (0x82466E80) - PPC kernel bypass.
@@ -88,7 +88,7 @@ u32 NtSuspendThread_hook(u32 handle) {
         thread->Suspend();
     return 0;
 }
-PPC_HOOK(rex_NtSuspendThread, NtSuspendThread_hook);
+REX_HOOK(rex_NtSuspendThread, NtSuspendThread_hook);
 
 /**
  * @brief ResumeThread (0x8248D7A8) - PPC kernel bypass.
@@ -99,7 +99,7 @@ u32 ResumeThread_hook(u32 handle) {
         thread->Resume();
     return 0;
 }
-PPC_HOOK(rex_ResumeThread, ResumeThread_hook);
+REX_HOOK(rex_ResumeThread, ResumeThread_hook);
 
 /**
  * @brief Vsync flip rate override (midasm at 0x8246AB68).

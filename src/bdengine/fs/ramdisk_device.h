@@ -91,7 +91,7 @@ class RamdiskEntry : public rex::filesystem::Entry {
   std::unique_ptr<rex::filesystem::Entry> CreateEntryInternal(const std::string_view name,
                                                                uint32_t attributes) override;
   bool DeleteEntryInternal(rex::filesystem::Entry* entry) override;
-  void RenameEntryInternal(const std::vector<std::string_view>& path_parts) override;
+  rex::X_STATUS RenameEntryInternal(const std::vector<std::string_view>& path_parts) override;
 
   // Null for directory entries.
   std::shared_ptr<RamdiskBlob> blob_;

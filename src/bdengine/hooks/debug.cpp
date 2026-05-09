@@ -176,7 +176,7 @@ void bdLogFileAccessHook(mapped_string filepath) {
   if (REXCVAR_GET(bd_hcfile_log))
     BD_DEBUG("[hcfile] {}", filepath.value());
 }
-PPC_HOOK(bdLogFileAccess, bdLogFileAccessHook);
+REX_HOOK(bdLogFileAccess, bdLogFileAccessHook);
 
 namespace {
 
@@ -240,4 +240,4 @@ u32 bdDebugPrintHook(mapped_string fmt) {
   BD_INFO("[dbg] {}", str);
   return 1;
 }
-PPC_HOOK(rex_DebugPrint, bdDebugPrintHook);
+REX_HOOK(rex_DebugPrint, bdDebugPrintHook);

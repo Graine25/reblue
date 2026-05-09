@@ -28,4 +28,4 @@ u32 bdGetDiscForStage_hook(u32 a1) {
     return (a1 == 0) ? 0 : 1;
 }
 
-PPC_HOOK(bdGetDiscForStage, bdGetDiscForStage_hook);
+REX_HOOK(bdGetDiscForStage, bdGetDiscForStage_hook);

@@ -14,5 +14,5 @@
 static double native_atan2(double y, double x) { return std::atan2(y, x); }
 static double native_atof(const char* s) { return std::atof(s); }
 
-PPC_HOOK(rex_atan2, native_atan2);
-PPC_HOOK(rex_atof, native_atof);
+REX_HOOK(rex_atan2, native_atan2);
+REX_HOOK(rex_atof, native_atof);

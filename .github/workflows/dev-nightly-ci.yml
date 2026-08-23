@@ -8,8 +8,6 @@ name: Dev nightly CI
 # on main for the cron to run. It skips quietly while `development` is absent.
 
 on:
-  push:
-    branches: [development]
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch: {}

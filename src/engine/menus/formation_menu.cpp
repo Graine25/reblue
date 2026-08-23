@@ -17,6 +17,7 @@
 #include "engine/chara_types.h"
 #include "engine/d2anime/anime_hittest.h"
 #include "engine/d2anime/anime_mouse.h"
+#include "engine/sfx.h"
 #include "engine/settings.h"
 #include "engine/state_layout.h"
 #include "reblue_init.h"
@@ -29,7 +30,6 @@ REX_IMPORT(__imp__bdInputCheckDpadRight, RankPadRight, u32());
 REX_IMPORT(__imp__bdInputCheckDpadLeft, RankPadLeft, u32());
 REX_IMPORT(__imp__bdInputCheckDpadUp, RankPadUp, u32(u32));
 REX_IMPORT(__imp__bdInputCheckDpadDown, RankPadDown, u32(u32));
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
 
 namespace bd::engine {
 
@@ -52,9 +52,6 @@ constexpr u32 kPhaseCarry = 2;
 // 272, both 256 by 128. This is the midline between those two plate centers, so
 // it splits the rows without a per-layout table of rects.
 constexpr f32 kRowDividerY = 372.0f;
-
-// What the screen's own cursor moves pass to bdPlaySoundEffect.
-constexpr u32 kSfxMenuCursor = 3;
 
 // AnimeVarBag_GetElementXYWHP's destination struct, five floats behind a vftable.
 struct AnimePosVar_t {
@@ -177,7 +174,7 @@ void MoveCursor(u32 taskVA, RankTask_t &task, int row, int col) {
     RankUpdateCursorPosName(taskVA);
   }
   if (Settings::Get().MouseCursorSFX())
-    PlaySoundEffect(kSfxMenuCursor);
+    sfx::Play(sfx::kCursor);
 }
 
 // Runs before the handler, so a click hits the cell the pointer is over

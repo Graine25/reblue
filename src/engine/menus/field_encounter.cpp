@@ -17,18 +17,16 @@
 #include "engine/d2anime/anime_hittest.h"
 #include "engine/d2anime/anime_input.h"
 #include "engine/d2anime/anime_mouse.h"
+#include "engine/sfx.h"
 #include "engine/settings.h"
 #include "engine/state_layout.h"
 #include "reblue_init.h"
 
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
 REX_EXTERN(__imp__bdFieldEncounterMenuUpdate);
 
 namespace bd::engine {
 
 namespace {
-
-constexpr u32 kSfxMenuCursor = 3;
 
 struct FieldEncounterItem_t {
   /* 0x00 */ be_u32 id; // zero past the last item
@@ -159,7 +157,7 @@ int LastCursor(const FieldEncounterMenu_t &m) {
 void MoveCursor(FieldEncounterMenu_t &m, int to) {
   m.cursor = u32(to);
   if (Settings::Get().MouseCursorSFX())
-    PlaySoundEffect(kSfxMenuCursor);
+    sfx::Play(sfx::kCursor);
 }
 
 // The same four inputs bdFieldEncounterMenuHandleList polls first out of its

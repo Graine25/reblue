@@ -15,6 +15,7 @@
 #include "core/memory_helpers.h"
 #include "engine/d2anime/anime_hittest.h"
 #include "engine/d2anime/cmdselect.h"
+#include "engine/sfx.h"
 #include "engine/settings.h"
 #include "engine/virtual_buttons.h"
 #include "platform/platform.h"
@@ -25,7 +26,6 @@ REX_IMPORT(__imp__AnimeMenu_setSelectedIndex, MenuSetSelectedIndex,
 REX_IMPORT(__imp__CommandSelectTask_SetSelection, CmdSelectSetSelection,
            u32(u32, u32, u32));
 REX_IMPORT(__imp__AnimeMenu_GetScrollPageCount, MenuScrollPageCount, u32(u32));
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
 REX_EXTERN(__imp__AnimeMenu_Update);
 REX_EXTERN(__imp__CommandSelectTask__vf02);
 
@@ -33,10 +33,6 @@ namespace bd::engine {
 
 namespace {
 
-// The value AnimeMenu_CursorMoveUpdate itself passes at 0x821805AC, and
-// CommandSelectTask_CursorMoveUpdate at 0x821E0010. Not kSfxCursor from
-// local_map.cpp, which is 4 and a different sound.
-constexpr u32 kSfxMenuCursor = 3;
 
 // AnimeMenu_setSelectedIndex's scrollMode: pulls the index into the visible
 // window, the behavior hover wants.
@@ -395,7 +391,7 @@ void MenuMouse::ApplyScroll(u32 va, int offset) {
   menu->scrollOffset = u16(offset);
   MenuSetSelectedIndex(va, u32(index), kScrollToShow);
   if (Settings::Get().MouseCursorSFX())
-    PlaySoundEffect(kSfxMenuCursor);
+    sfx::Play(sfx::kCursor);
 }
 
 void MenuMouse::Apply(u32 va, int index, bool commandSelect) {
@@ -412,7 +408,7 @@ void MenuMouse::Apply(u32 va, int index, bool commandSelect) {
   else
     MenuSetSelectedIndex(va, u32(index), kScrollToShow);
   if (Settings::Get().MouseCursorSFX())
-    PlaySoundEffect(kSfxMenuCursor);
+    sfx::Play(sfx::kCursor);
 }
 
 void MenuMouse::BeginFrame() {

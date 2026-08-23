@@ -17,6 +17,7 @@
 #include "engine/menus/config_menu.h"
 #include "engine/menus/config_menu_data.h"
 #include "engine/settings.h"
+#include "engine/sfx.h"
 #include "engine/state_layout.h"
 #include "gpu/gpu.h"
 
@@ -37,7 +38,6 @@ using bd::engine::CheckButton;
 using rex::memory::store_and_swap;
 
 REX_IMPORT(__imp__bdColor4fToARGB, Color4fToARGB, u32(u32));
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
 REX_IMPORT(__imp__bdTextCalcWidth, TextCalcWidth, f64(f64, u32, u32, u32, u32));
 REX_IMPORT(__imp__SequenceHolder_FindSequenceByName, FindSequenceByName,
            u32(u32, u32));
@@ -55,8 +55,6 @@ constexpr float kCursorBaseY = 528.0f;
 constexpr float kEntrySpacing = 32.0f;
 constexpr float kTextCursorOffset = 16.0f;
 
-// The move sound the engine's own title navigation plays.
-constexpr u32 kSfxCursor = 3;
 
 // TitleTask_t::state.
 constexpr u32 kTitleStateMenu = 2; // navigable row list
@@ -163,7 +161,7 @@ void NavigateNoSaveMenu(u32 titleTask) {
 
   if (next != cursor) {
     task->cursor = next;
-    PlaySoundEffect(kSfxCursor);
+    sfx::Play(sfx::kCursor);
   }
 }
 
@@ -212,7 +210,7 @@ void HoverTitleRows(u32 titleTask) {
 
   task->cursor = static_cast<u32>(row);
   if (bd::engine::Settings::Get().MouseCursorSFX())
-    PlaySoundEffect(kSfxCursor);
+    sfx::Play(sfx::kCursor);
 }
 
 // Text top-left sits kTextCursorOffset above the cursor strip center.

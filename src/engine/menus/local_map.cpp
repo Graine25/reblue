@@ -32,9 +32,9 @@
 #include "engine/menus/local_map_layout.h"
 #include "engine/menus/map_markers.h"
 #include "engine/settings.h"
+#include "engine/sfx.h"
 #include "engine/state_layout.h"
 
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
 REX_IMPORT(__imp__AnimeVarBag_FindChildByName, VarBagFindChild, u32(u32, u32));
 
 REX_EXTERN(__imp__WorldMapScreenTask__vf02_Update);
@@ -72,11 +72,6 @@ constexpr float kLegendZ = 9.95f; // its own band, so the markers keep theirs
 // the map is centered left of the frame to clear it.
 constexpr float kMapCenterOffsetX = 75.0f;
 constexpr u32 kLegendSwatchAlpha = 204;
-
-// As WorldMapScreen_SetState picks them for the screen's own open and cancel.
-constexpr u32 kSfxOpen = 0;
-constexpr u32 kSfxCancel = 1;
-constexpr u32 kSfxCursor = 4;
 
 // L_wrmap.csv hangs its legend column, compass rose, graph paper and tick marks
 // off one x origin, so parking that off screen clears everything the area map
@@ -286,7 +281,7 @@ bool AreaMap::StepFloor(int delta) {
   const int count = static_cast<int>(floors_.size());
   floor_ = (SelectedIndex() + delta + count) % count;
   panU_ = panV_ = 0.5f;
-  PlaySoundEffect(kSfxCursor);
+  sfx::Play(sfx::kToggle);
   return true;
 }
 
@@ -378,7 +373,7 @@ void AreaMap::Enter() {
   legend_ = Settings::Get().MapGimmickMarkers() ? BuildLegend(markers_)
                                                 : std::vector<LegendRow>();
 
-  PlaySoundEffect(kSfxOpen);
+  sfx::Play(sfx::kOpen);
   ApplyScreenVars(true);
   HideVanillaAnime();
 }
@@ -520,7 +515,7 @@ bool AreaMap::Update(u32 screenTask) {
     const bool available = !floors_.empty();
     Leave();
     if (available)
-      PlaySoundEffect(kSfxCancel);
+      sfx::Play(sfx::kCancel);
     SyncPrompts(available);
     return true;
   }
@@ -545,7 +540,7 @@ bool AreaMap::Update(u32 screenTask) {
   const int zoomed = std::clamp(zoom_ + zoomStep, 0, kZoomCount - 1);
   if (zoomed != zoom_) {
     zoom_ = zoomed;
-    PlaySoundEffect(kSfxCursor);
+    sfx::Play(sfx::kToggle);
   }
 
   if (CheckButton(Button::Up))

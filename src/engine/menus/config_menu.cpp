@@ -16,6 +16,7 @@
 #include "engine/achievements/achievement_list.h"
 #include "engine/d2anime/anime_mouse.h"
 #include "engine/d2anime/d2anime.h"
+#include "engine/sfx.h"
 #include "engine/glyph_set.h"
 #include "engine/menus/config_layout.h"
 #include "engine/menus/config_menu_data.h"
@@ -26,13 +27,6 @@
 #include <rex/cvar.h>
 #include <rex/hook.h>
 #include <rex/types.h>
-
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
-
-namespace sfx {
-    constexpr u32 kOpen = 0;
-    constexpr u32 kCancel = 1;
-} // namespace sfx
 
 namespace bd::engine {
 
@@ -386,18 +380,18 @@ void ConfigMenu::Transition(State next) {
             (state_ == State::PADLAYOUT && next == State::SETTINGS) ||
             (state_ == State::KEYBIND_CAPTURE && next == State::KEYBINDS) ||
             (state_ == State::REORDER && next == State::MODLIST)) {
-            PlaySoundEffect(sfx::kCancel);
+            sfx::Play(sfx::kCancel);
         }
         // Entering content lists from sidebar -> play kOpen
         else if (state_ == State::SECTION && next != State::SECTION && next != State::CLOSING) {
-            PlaySoundEffect(sfx::kOpen);
+            sfx::Play(sfx::kOpen);
         }
         // Opening submenus, reorder mode, capture, and popups -> play kOpen
         else if (next == State::KEYBINDS || next == State::PADLAYOUT ||
             next == State::KEYBIND_CAPTURE || next == State::REORDER ||
             next == State::CONFIRM_DELETE || next == State::CONFIRM_REBOOT ||
             next == State::CONFIRM_RESET_BINDS) {
-            PlaySoundEffect(sfx::kOpen);
+            sfx::Play(sfx::kOpen);
         }
     }
   

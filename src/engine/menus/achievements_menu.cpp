@@ -13,6 +13,7 @@
 #include "engine/achievements/achievement_icon_tex.h"
 #include "engine/achievements/achievement_list.h"
 #include "engine/menus/achievements_layout.h"
+#include "engine/sfx.h"
 
 #include <format>
 #include <string>
@@ -20,18 +21,11 @@
 
 #include <rex/hook.h>
 
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
-
 namespace bd::engine {
 
 namespace {
 
 constexpr const char *kMenuMount = "ui:achievements-menu";
-
-// Camp::Diary::MainTask's vf02 pairs 0 with AnimeMenu_CheckConfirmInput and 1
-// with AnimeMenu_CheckCancelInput throughout (0x822F7810, 0x822F7864), so these
-// are the two cues every Encyclopedia screen already speaks.
-constexpr u32 kSeCancel = 1;
 
 // The description runs the full width of the list it sits under: 600px at the
 // 15px font's ~8px advance. Wrapping is by glyph count, so this is short of
@@ -335,7 +329,7 @@ void AchievementsMenu::UpdateRowDesc(int cursor) {
 void AchievementsMenu::HandleList() {
   if (!CheckButton(Button::B))
     return;
-  PlaySoundEffect(kSeCancel);
+  sfx::Play(sfx::kCancel);
   StartOutro();
 }
 

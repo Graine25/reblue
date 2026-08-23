@@ -13,21 +13,13 @@
 #include "engine/d2anime/anime_hittest.h"
 #include "engine/d2anime/anime_mouse.h"
 #include "engine/d2anime/d2anime.h"
+#include "engine/sfx.h"
 #include "engine/game_options.h"
 #include "engine/menus/config_layout.h"
 #include "engine/menus/config_menu_data.h"
 #include "platform/platform.h"
 
 #include <rex/types.h>
-
-REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
-
-namespace sfx {
-    constexpr u32 kOpen = 0;
-    constexpr u32 kCancel = 1;
-    constexpr u32 kCursor = 3;
-    constexpr u32 kDisabled = 2;
-} // namespace sfx
 
 namespace bd::engine {
 
@@ -148,7 +140,7 @@ bool ConfigMenu::SetRowFromPointer(int row, f32 x, bool dragging) {
 
     if (SettingsDisabled(page, row)) {
         if (!dragging)
-            PlaySoundEffect(sfx::kDisabled);
+            sfx::Play(sfx::kDisabled);
         return false;
     }
 
@@ -208,7 +200,7 @@ bool ConfigMenu::SetRowFromPointer(int row, f32 x, bool dragging) {
 
     if (changed) {
         if (playSound)
-            PlaySoundEffect(sfx::kCursor);
+            sfx::Play(sfx::kCursor);
 
         settings_dirty_ = true;
         if (SettingsRestartBound(page, row))
@@ -256,11 +248,11 @@ void ConfigMenu::HandleSettings() {
 
   if (dir != 0) {
     if (SettingsDisabled(page, cursor)) {
-        PlaySoundEffect(sfx::kDisabled);
+        sfx::Play(sfx::kDisabled);
     }
 
     if (CycleSetting(page, cursor, dir)) {
-      PlaySoundEffect(sfx::kCursor);
+      sfx::Play(sfx::kCursor);
       settings_dirty_ = true;
       if (SettingsRestartBound(page, cursor))
         settings_restart_dirty_ = true;
@@ -298,7 +290,7 @@ void ConfigMenu::HandleSettings() {
 
     if (SettingsRowUi(page, row) == RowUi::Action) {
       if (SettingsDisabled(page, row)) {
-          PlaySoundEffect(sfx::kDisabled);
+          sfx::Play(sfx::kDisabled);
           return;
       }
       const SettingAction action = SettingsRowAction(page, row);
@@ -332,12 +324,12 @@ void ConfigMenu::HandleSettings() {
     }
 
     if (SettingsDisabled(page, row)) {
-        PlaySoundEffect(sfx::kDisabled);
+        sfx::Play(sfx::kDisabled);
         return;
     }
 
     if (CycleSetting(page, row, 1)) {
-      PlaySoundEffect(sfx::kOpen);
+      sfx::Play(sfx::kOpen);
       settings_dirty_ = true;
       if (SettingsRestartBound(page, row))
         settings_restart_dirty_ = true;
@@ -374,7 +366,7 @@ void ConfigMenu::HandlePadLayout() {
       opts.SetCtlMechattType(type);
     else
       opts.SetCtlNormalType(type);
-    PlaySoundEffect(sfx::kCursor);
+    sfx::Play(sfx::kCursor);
     settings_dirty_ = true;
     RefreshPadLayout();
     return;

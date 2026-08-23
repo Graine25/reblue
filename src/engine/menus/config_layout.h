@@ -347,9 +347,12 @@ public:
   FloatV restartVis{"RestartVis", -1.0};
   StringV restartNote{"RestartNote", ""};
 
-  // Selected row's description, shown above the footer (2 wrapped lines).
+  // Selected row's description, shown above the footer (2 wrapped lines). A
+  // description that fits one line takes the centered slot instead, halfway
+  // between the list bottom and the footer rule rather than against the list.
   StringV rowDesc0{"RowDesc0", ""};
   StringV rowDesc1{"RowDesc1", ""};
+  StringV rowDescC{"RowDescC", ""};
 
   // Keybind screen chrome: the two column headers, and the spacer band's
   // compat header plus the rebind hint beside it. The grid runs past the

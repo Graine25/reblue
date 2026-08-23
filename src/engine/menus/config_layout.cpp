@@ -849,8 +849,8 @@ void ConfigLayout::build(CsvBuilder &b) {
   b.comment("variable definitions").vars(start, alpha);
   Declare(b, title, hdrSections, hdrMods, hdrDetails, ftrA, ftrB, ftrX, ftrY,
           ftrBack, ftrAVis, ftrXVis, ftrYVis, ftrBackVis, restartVis,
-          restartNote, rowDesc0, rowDesc1, hdrActions, hdrMovement, hdrCompat,
-          kbHint, kbChromeVis);
+          restartNote, rowDesc0, rowDesc1, rowDescC, hdrActions, hdrMovement,
+          hdrCompat, kbHint, kbChromeVis);
   b.blank();
 
   if (standalone_)
@@ -991,6 +991,7 @@ void ConfigLayout::build(CsvBuilder &b) {
                                .contentVar = restartNote.name()})
       .message(rowDesc(568, rowDesc0.name()))
       .message(rowDesc(590, rowDesc1.name()))
+      .message(rowDesc(583, rowDescC.name()))
       .blank()
       .setVal("cfg_icon.pos", "115,35,64,64,0")
       .blank();

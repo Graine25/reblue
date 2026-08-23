@@ -451,6 +451,7 @@ void ConfigMenu::Transition(State next) {
   layout.restartVis.set(-1.0);
   layout.rowDesc0.set("");
   layout.rowDesc1.set("");
+  layout.rowDescC.set("");
   layout.hdrActions.set("");
   layout.hdrMovement.set("");
   layout.hdrCompat.set("");

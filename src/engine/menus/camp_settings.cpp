@@ -17,6 +17,13 @@
 
 REX_EXTERN(__imp__Camp__Config__MainTask__vf02);
 REX_IMPORT(__imp__bdCampConfigSetState, CampConfigSetState, u32(u32, u32));
+REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
+
+namespace sfx {
+    constexpr u32 kOpen = 0;
+    constexpr u32 kCancel = 1;
+    constexpr u32 kCursor = 3;
+} // namespace sfx
 
 namespace bd::engine {
 
@@ -224,6 +231,7 @@ bool CampSettings::Update(PPCContext &ctx, u8 *base, u32 taskAddr) {
   HidePrompts();
 
   if (menu_.IsClosing()) {
+    PlaySoundEffect(sfx::kCancel);
     Close();
     // The screen's own outro - seek the transition page to its end and play it
     // at a negative rate - hangs off the exit request, but only when the task

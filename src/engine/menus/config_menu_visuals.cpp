@@ -145,7 +145,10 @@ void ConfigMenu::HideDLCDetail() { task_.SetFloat("dlcdetail.start", -1.0); }
 void ConfigMenu::SetRowDesc(const std::string &text) {
   auto &layout = GetLayout();
   const auto lines = WrapTwoLines(text, kRowDescWrapChars);
-  layout.rowDesc0.set(lines[0]);
+  // One line sits centered in the band under the list, two lines fill it.
+  const bool single = lines[1].empty();
+  layout.rowDescC.set(single ? lines[0] : std::string());
+  layout.rowDesc0.set(single ? std::string() : lines[0]);
   layout.rowDesc1.set(lines[1]);
 }
 

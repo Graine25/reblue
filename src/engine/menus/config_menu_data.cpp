@@ -24,6 +24,14 @@
 
 #include <rex/types.h>
 
+REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
+
+namespace sfx {
+    constexpr u32 kToggle = 4;
+    constexpr u32 kCancel = 1;
+    constexpr u32 kDisabled = 2;
+} // namespace sfx
+
 namespace bd::engine {
 
 namespace {
@@ -111,6 +119,7 @@ void FlipMod(int index) {
   auto &mods = vfs::VFS::Get().Mods();
   auto i = static_cast<size_t>(index);
   mods.SetEnabled(i, !mods.IsEnabled(i));
+  PlaySoundEffect(sfx::kToggle);
 }
 
 void ReorderMod(int a, int b) {
@@ -337,6 +346,7 @@ void ToggleDLC(int index) {
   if (dlc.SetEnabled(static_cast<size_t>(index),
                      !dlc.IsEnabled(static_cast<size_t>(index))))
     s_dlc_changed = true;
+    PlaySoundEffect(sfx::kToggle);
 }
 
 bool IsDLCEnabled(int index) {

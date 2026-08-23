@@ -20,6 +20,15 @@
 
 #include <rex/types.h>
 
+REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
+
+namespace sfx {
+    constexpr u32 kOpen = 0;
+    constexpr u32 kCancel = 1;
+    constexpr u32 kCursor = 3;
+    constexpr u32 kDisabled = 2;
+} // namespace sfx
+
 namespace bd::engine {
 
 namespace {
@@ -133,50 +142,79 @@ int ConfigMenu::HeldStep(int cursor) {
 // The pointer names a value rather than a direction: an option button sets the
 // option it is, and a point along a slider track sets the value it stands for.
 bool ConfigMenu::SetRowFromPointer(int row, f32 x, bool dragging) {
-  const auto page = settings_page_;
-  if (row < 0 || row >= static_cast<int>(SettingsCount(page)) ||
-      SettingsDisabled(page, row))
-    return false;
+    const auto page = settings_page_;
+    if (row < 0 || row >= static_cast<int>(SettingsCount(page)))
+        return false;
 
-  const auto ui = SettingsRowUi(page, row);
-  bool changed = false;
-  if (ui == RowUi::Slider || ui == RowUi::SliderSteps) {
-    double fraction = 0.0;
-    if (!SettingItemTemplate::SliderFractionAt(x, fraction))
-      return false;
-    if (ui == RowUi::Slider) {
-      const double lo = SettingsSliderMin(page, row);
-      const double hi = SettingsSliderMax(page, row);
-      changed = SetSliderValue(page, row, lo + fraction * (hi - lo));
-    } else {
-      // A stepped bar's positions are its options, so the nearest one wins
-      // rather than the value being rounded to a step.
-      const int count = SettingsOptionCount(page, row);
-      changed = count > 1 &&
-                SetSelectedOption(
-                    page, row, static_cast<int>(fraction * (count - 1) + 0.5));
+    if (SettingsDisabled(page, row)) {
+        if (!dragging)
+            PlaySoundEffect(sfx::kDisabled);
+        return false;
     }
-  } else if (ui == RowUi::Buttons) {
-    // A button is a place, not a sweep, so only the press picks one.
-    if (dragging)
-      return false;
-    const int option =
-        SettingItemTemplate::ButtonAt(x, SettingsOptionCount(page, row));
-    if (option < 0)
-      return false;
-    changed = SetSelectedOption(page, row, option);
-  } else {
-    return false;
-  }
 
-  if (changed) {
-    settings_dirty_ = true;
-    if (SettingsRestartBound(page, row))
-      settings_restart_dirty_ = true;
-  }
-  // The click was spent on the control whether or not the value moved, so
-  // clicking the selected option does not step past it.
-  return true;
+    const auto ui = SettingsRowUi(page, row);
+    bool changed = false;
+    bool playSound = false;
+
+    if (ui == RowUi::Slider || ui == RowUi::SliderSteps) {
+        double fraction = 0.0;
+        if (!SettingItemTemplate::SliderFractionAt(x, fraction))
+            return false;
+
+        if (ui == RowUi::Slider) {
+            const double oldFrac = SettingsSliderFraction(page, row);
+            const double lo = SettingsSliderMin(page, row);
+            const double hi = SettingsSliderMax(page, row);
+            changed = SetSliderValue(page, row, lo + fraction * (hi - lo));
+
+            if (changed) {
+                // Quantize continuous slider into 10 discrete audio steps (10% increments)
+                constexpr int kAudioSteps = 10;
+                const int oldStep = static_cast<int>(oldFrac * kAudioSteps + 0.5);
+                const int newStep = static_cast<int>(fraction * kAudioSteps + 0.5);
+                if (oldStep != newStep) {
+                    playSound = true;
+                }
+            }
+        }
+        else {
+            // Stepped slider
+            const int count = SettingsOptionCount(page, row);
+            const double oldFrac = SettingsSliderFraction(page, row);
+            const int oldOption = static_cast<int>(oldFrac * (count - 1) + 0.5);
+            const int targetOption = static_cast<int>(fraction * (count - 1) + 0.5);
+
+            changed = count > 1 && SetSelectedOption(page, row, targetOption);
+            if (changed && targetOption != oldOption) {
+                playSound = true;
+            }
+        }
+    }
+    else if (ui == RowUi::Buttons) {
+        if (dragging)
+            return false;
+        const int option =
+            SettingItemTemplate::ButtonAt(x, SettingsOptionCount(page, row));
+        if (option < 0)
+            return false;
+        changed = SetSelectedOption(page, row, option);
+        if (changed) {
+            playSound = true;
+        }
+    }
+    else {
+        return false;
+    }
+
+    if (changed) {
+        if (playSound)
+            PlaySoundEffect(sfx::kCursor);
+
+        settings_dirty_ = true;
+        if (SettingsRestartBound(page, row))
+            settings_restart_dirty_ = true;
+    }
+    return true;
 }
 
 void ConfigMenu::HandleSettings() {
@@ -217,7 +255,12 @@ void ConfigMenu::HandleSettings() {
     dir = repeat;
 
   if (dir != 0) {
+    if (SettingsDisabled(page, cursor)) {
+        PlaySoundEffect(sfx::kDisabled);
+    }
+
     if (CycleSetting(page, cursor, dir)) {
+      PlaySoundEffect(sfx::kCursor);
       settings_dirty_ = true;
       if (SettingsRestartBound(page, cursor))
         settings_restart_dirty_ = true;
@@ -254,6 +297,10 @@ void ConfigMenu::HandleSettings() {
       return;
 
     if (SettingsRowUi(page, row) == RowUi::Action) {
+      if (SettingsDisabled(page, row)) {
+          PlaySoundEffect(sfx::kDisabled);
+          return;
+      }
       const SettingAction action = SettingsRowAction(page, row);
       if (!SettingsDisabled(page, row)) {
         if (action == SettingAction::Keybinds) {
@@ -278,7 +325,19 @@ void ConfigMenu::HandleSettings() {
       return;
     }
 
+    // Guard: Do not step or cycle when pressing 'A' on sliders
+    const auto ui = SettingsRowUi(page, row);
+    if (ui == RowUi::Slider || ui == RowUi::SliderSteps) {
+        return;
+    }
+
+    if (SettingsDisabled(page, row)) {
+        PlaySoundEffect(sfx::kDisabled);
+        return;
+    }
+
     if (CycleSetting(page, row, 1)) {
+      PlaySoundEffect(sfx::kOpen);
       settings_dirty_ = true;
       if (SettingsRestartBound(page, row))
         settings_restart_dirty_ = true;
@@ -315,6 +374,7 @@ void ConfigMenu::HandlePadLayout() {
       opts.SetCtlMechattType(type);
     else
       opts.SetCtlNormalType(type);
+    PlaySoundEffect(sfx::kCursor);
     settings_dirty_ = true;
     RefreshPadLayout();
     return;

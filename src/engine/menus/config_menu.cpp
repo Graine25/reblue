@@ -27,6 +27,13 @@
 #include <rex/hook.h>
 #include <rex/types.h>
 
+REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));
+
+namespace sfx {
+    constexpr u32 kOpen = 0;
+    constexpr u32 kCancel = 1;
+} // namespace sfx
+
 namespace bd::engine {
 
 std::array<D2AnimeMenu *, ConfigMenu::kMenuCount> ConfigMenu::Menus() {
@@ -370,6 +377,30 @@ bool ConfigMenu::DiscoverMenus() {
 }
 
 void ConfigMenu::Transition(State next) {
+    // Suppress all transition SFX while booting from INIT
+    if (state_ != State::INIT) {
+        // Backing out / Dismissing submenus & screens -> play kCancel
+        if (next == State::CLOSING ||
+            (state_ != State::SECTION && next == State::SECTION) ||
+            (state_ == State::KEYBINDS && next == State::SETTINGS) ||
+            (state_ == State::PADLAYOUT && next == State::SETTINGS) ||
+            (state_ == State::KEYBIND_CAPTURE && next == State::KEYBINDS) ||
+            (state_ == State::REORDER && next == State::MODLIST)) {
+            PlaySoundEffect(sfx::kCancel);
+        }
+        // Entering content lists from sidebar -> play kOpen
+        else if (state_ == State::SECTION && next != State::SECTION && next != State::CLOSING) {
+            PlaySoundEffect(sfx::kOpen);
+        }
+        // Opening submenus, reorder mode, capture, and popups -> play kOpen
+        else if (next == State::KEYBINDS || next == State::PADLAYOUT ||
+            next == State::KEYBIND_CAPTURE || next == State::REORDER ||
+            next == State::CONFIRM_DELETE || next == State::CONFIRM_REBOOT ||
+            next == State::CONFIRM_RESET_BINDS) {
+            PlaySoundEffect(sfx::kOpen);
+        }
+    }
+  
   // Backing out to the sidebar with the pointer still over the list would hop
   // straight back into it, since the sidebar keeps that list up as its preview.
   // The block lifts as soon as the pointer leaves the list.

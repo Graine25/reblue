@@ -13,6 +13,7 @@
 #include "core/settings_model.h"
 #include "core/text_wrap.h"
 #include "engine/achievements/achievement_list.h"
+#include "engine/d2anime/anime_mouse.h"
 #include "engine/d2anime/d2anime.h"
 #include "engine/game_options.h"
 #include "engine/glyph_set.h"
@@ -240,7 +241,6 @@ void ConfigMenu::UpdateFooter() {
     SetFooter({.a = "footer.rebind",
                .b = "footer.back",
                .x = "footer.clear",
-               .y = "footer.rebind_alt",
                .back = "footer.reset_binds"});
     break;
   case State::KEYBIND_CAPTURE:
@@ -431,8 +431,8 @@ void ConfigMenu::RefreshSettingsVisuals() {
 // button until a key is captured. The centered text carries only what a
 // cap cannot: the capture ellipsis, the unbound word, and the display name of
 // a config-typed bind the sheet has no art for. The grid slots that carry no
-// bind (the spacer band and the tail) blank out every frame, WndType
-// included, so the engine's cursor frame never lights an empty cell.
+// bind (see kKeybindSlotBind) blank out every frame, WndType included, so
+// the engine's cursor frame never lights an empty cell.
 void ConfigMenu::RefreshKeybindVisuals() {
   constexpr auto page = SettingsPage::Keybinds;
   constexpr const char *kCapturing = "...";
@@ -442,10 +442,17 @@ void ConfigMenu::RefreshKeybindVisuals() {
   // is the selection marker here.
   keybind_menu_.SetCursorShown(false);
 
+  // The row under the pointer grows an empty alternate box while it has none,
+  // so the click target for adding one is visible before it is clicked.
+  int hoverSlot = -1;
+  f32 hoverX = 0.0f;
+  if (state_ == State::KEYBINDS && MenuMouse::Get().MouseHasCursor())
+    keybind_menu_.PointerRowX(hoverSlot, hoverX);
+
   const int count = static_cast<int>(SettingsCount(page));
   keybind_menu_.ForEachTemplate([&](int gridSlot, u32 vb) {
     const int i = KeybindSlotToIndex(gridSlot);
-    if (KeybindSlotIsSpacer(gridSlot) || i >= count) {
+    if (i < 0 || i >= count) {
       VarBagSetText(vb, "Name", "");
       VarBagSetString(vb, "WndType", "NOWINDOW");
       VarBagSetFloat(vb, "RowVis", -1.0);
@@ -460,6 +467,7 @@ void ConfigMenu::RefreshKeybindVisuals() {
     const bool disabled = SettingsDisabled(page, i);
     const bool capturing =
         state_ == State::KEYBIND_CAPTURE && i == capture_index_;
+    const bool hovered = gridSlot == hoverSlot && !disabled;
 
     VarBagSetText(vb, "Name", SettingsLabel(page, i));
     VarBagSetFloat(vb, "Dim", DimFor(disabled));
@@ -478,6 +486,8 @@ void ConfigMenu::RefreshKeybindVisuals() {
                           const char *modUvVar) {
       const bool on = capturing && capture_alt_ == alt;
       const std::string token = SettingsKeybindToken(page, i, alt);
+      // The hovered row offers its missing alternate as an empty '+' box.
+      const bool offered = alt && token.empty() && !on && hovered;
       std::string text;
       int key = -1;
       int mod = -1;
@@ -488,6 +498,8 @@ void ConfigMenu::RefreshKeybindVisuals() {
         // boxes is most of what made the grid unreadable.
         if (!alt)
           text = i18n::Text("settings.keybind.unbound");
+        else if (offered)
+          text = "+";
       } else {
         const size_t plus = token.find_last_of('+');
         key = KeyIndex(plus == std::string::npos ? std::string_view(token)
@@ -513,9 +525,9 @@ void ConfigMenu::RefreshKeybindVisuals() {
           setUv(modUvVar, Glyphs::ModifierArtUV(mod));
       }
       VarBagSetString(vb, wndVar,
-                      alt && token.empty() && !on ? "NOWINDOW"
-                      : on                        ? "BTN01_ON"
-                                                  : "BTN01_OF");
+                      alt && token.empty() && !on && !offered ? "NOWINDOW"
+                      : on                                    ? "BTN01_ON"
+                                                              : "BTN01_OF");
       VarBagSetColor(vb, colVar, on ? kHighlightYellow : kWhite);
     };
     slot(false, "Key", "KeyWnd", "KeyCol", "KeyCap", "KeyUv", "KeyPair",
@@ -523,9 +535,10 @@ void ConfigMenu::RefreshKeybindVisuals() {
     slot(true, "Key2", "KeyWnd2", "KeyCol2", "KeyCap2", "KeyUv2", "KeyPair2",
          "KeyModUv2");
 
-    // With no alternate bound the row closes after its one key.
+    // With no alternate bound the row closes after its one key, unless it is
+    // the hovered row holding its box open as the add-alternate target.
     const bool pair = !SettingsKeybindToken(page, i, true).empty() ||
-                      (capturing && capture_alt_);
+                      (capturing && capture_alt_) || hovered;
     VarBagSetFloat(vb, "RowW", pair ? kKeybindRowPairW : kKeybindRowSoloW);
   });
 }

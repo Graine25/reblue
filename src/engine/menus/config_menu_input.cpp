@@ -403,28 +403,50 @@ void ConfigMenu::HandleKeybinds() {
     last_keybind_slot_ = gridSlot;
   }
 
-  const int cursor =
-      KeybindSlotIsSpacer(gridSlot) ? -1 : KeybindSlotToIndex(gridSlot);
-  const bool onRow = cursor >= 0 &&
-                     cursor < static_cast<int>(SettingsCount(page)) &&
-                     !SettingsDisabled(page, cursor);
+  const int count = static_cast<int>(SettingsCount(page));
+  const int cursor = KeybindSlotToIndex(gridSlot);
+  const bool onRow =
+      cursor >= 0 && cursor < count && !SettingsDisabled(page, cursor);
+
+  // The key box under the pointer, which a click rebinds and Delete empties.
+  const bool pointer = MenuMouse::Get().MouseHasCursor();
+  int hoverSlot = -1, hoverChip = -1;
+  f32 hoverX = 0.0f;
+  if (pointer && keybind_menu_.PointerRowX(hoverSlot, hoverX))
+    hoverChip = KeybindItemTemplate::ChipAt(hoverX);
+  const int hoverIndex = KeybindSlotToIndex(hoverSlot);
+  const bool onHover = hoverIndex >= 0 && hoverIndex < count &&
+                       !SettingsDisabled(page, hoverIndex);
 
   // Left/Right move the cursor across the 2-column grid (engine-driven).
-  const bool wantsPrimary = CheckButton(Button::A);
-  const bool wantsAlt = CheckButton(Button::Y);
-  if (wantsPrimary || wantsAlt) {
-    if (onRow) {
-      capture_index_ = cursor;
-      capture_alt_ = wantsAlt;
+  // A click captures into the key box it lands on, the primary from anywhere
+  // else on its row. A pad press reads the cursor row instead of a pointer.
+  if (CheckButton(Button::A)) {
+    const int target = pointer ? (onHover ? hoverIndex : -1)
+                               : (onRow ? cursor : -1);
+    if (target >= 0) {
+      capture_index_ = target;
+      capture_alt_ = pointer && hoverChip == 1;
       bd::platform::BeginKeyCapture();
       Transition(State::KEYBIND_CAPTURE);
     }
     return;
   }
 
-  // Emptying a row lives here rather than inside the capture, so it costs no
-  // key: a capture that read Delete as 'clear' would be a Delete nobody could
-  // bind.
+  // Hover plus Delete empties one key box. The bind list stores primary then
+  // alternate, so an emptied primary promotes the alternate beside it.
+  const bool delDown =
+      bd::platform::Keyboard().IsDown(rex::ui::VirtualKey::kDelete);
+  if (delDown && !del_held_ && onHover && hoverChip >= 0) {
+    if (!SettingsKeybindToken(page, hoverIndex, hoverChip == 1).empty() &&
+        SetKeybind(page, hoverIndex, "", hoverChip == 1))
+      settings_dirty_ = true;
+  }
+  del_held_ = delDown;
+
+  // Emptying a whole row lives here rather than inside the capture, so it
+  // costs no key: a capture that read Delete as 'clear' would be a Delete
+  // nobody could bind.
   if (CheckButton(Button::X)) {
     if (onRow && ClearKeybind(page, cursor))
       settings_dirty_ = true;

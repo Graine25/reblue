@@ -178,6 +178,9 @@ private:
   SettingAction pad_action_ = SettingAction::PadLayout;
   int capture_index_ = -1;
   bool capture_alt_ = false;
+  // Edge detector for the keybind screen's hover-Delete, a host key with no
+  // guest button to edge-gate it.
+  bool del_held_ = false;
   // Last keybind grid slot the cursor held outside the spacer band. It tells
   // the spacer nudge which way the cursor was traveling.
   int last_keybind_slot_ = 0;

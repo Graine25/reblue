@@ -553,9 +553,8 @@ void ConfigMenu::Transition(State next) {
     HideDLCDetail();
     RefreshKeybindVisuals();
     SetHeaders("", "", "");
-    // No standing hint: the modifier caps on the rows say what a combination
-    // looks like better than a line of text does.
-    SetKeybindChrome(nullptr);
+    // The pointer interactions are the ones nothing on screen names.
+    SetKeybindChrome("menu.hint.keybinds");
     BD_DEBUG("[config] state -> KEYBINDS");
     break;
 
@@ -614,7 +613,7 @@ void ConfigMenu::Transition(State next) {
   case State::CONFIRM_RESET_BINDS:
     // The list stays up behind the popup, so its section panels and titles,
     // which every transition clears, have to be put back with it.
-    SetKeybindChrome(nullptr);
+    SetKeybindChrome("menu.hint.keybinds");
     confirm_popup_.Create(task_.guest_address(),
                           i18n::Text("menu.confirm.reset_binds").c_str(),
                           i18n::Text("menu.confirm.undone").c_str());

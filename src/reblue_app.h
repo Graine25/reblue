@@ -76,6 +76,7 @@ private:
 #endif
   std::unique_ptr<bd::ui::PerfOverlay> perf_overlay_;
   std::unique_ptr<bd::ui::WatermarkOverlay> watermark_;
+  std::unique_ptr<bd::ui::FadeOverlay> fade_overlay_;
 
   // Raw observer: ImGuiDialog self-deletes on Close(), and the on_closed lambda
   // nulls this back to nullptr.

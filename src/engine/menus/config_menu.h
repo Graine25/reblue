@@ -63,6 +63,9 @@ public:
   bool Prime();
   bool IsActive() const { return active_; }
   bool IsClosing() const { return state_ == State::CLOSING; }
+  // True once the screen is up and drawing, which is when a fade held over
+  // the load can start lifting.
+  bool IsOnScreen() const { return active_ && task_ && task_.IsVisible(); }
   bool WantsRestart() const { return wants_restart_; }
 
   u32 TaskAddr() const { return task_.guest_address(); }

@@ -20,6 +20,7 @@
 #include "engine/sfx.h"
 #include "engine/state_layout.h"
 #include "gpu/gpu.h"
+#include "ui/ui.h"
 
 #include <algorithm>
 #include <cstring>
@@ -97,6 +98,15 @@ bd::engine::ConfigMenu s_config_menu;
 bool s_create_config = false;
 bool s_config_closing = false;
 u32 s_title_task_addr = 0;
+
+// Screen-fade sequencing around the config child. The title fades to black
+// before it stops drawing, the veil holds while the config task loads or
+// tears down, and it lifts once what is under it is on screen, so neither the
+// bare child-state backdrop nor a popping menu is ever visible.
+enum class ConfigFade { None, TitleOut, Hold, Lift, ConfigOut };
+ConfigFade s_config_fade = ConfigFade::None;
+constexpr f32 kFadeOutSeconds = 0.20f;
+constexpr f32 kFadeInSeconds = 0.25f;
 
 // Registered id of the engine "DebugMenu" sequence, resolved once at the title.
 // It is only registered when devmode was on at boot.
@@ -342,15 +352,21 @@ bool bdTitleModsDispatchHook(PPCRegister &r31, PPCRegister &r11) {
   auto *task = Task(titleTask);
   u32 cursor = task->cursor;
 
+  // A press mid-transition belongs to the fade, not to a row.
+  if (s_config_fade != ConfigFade::None)
+    return true;
+
   if (DebugMenuAvailable() && cursor == DebugMenuIndex(titleTask)) {
     task->next_seq_id = s_debug_seq_id;
     return true;
   }
 
   if (cursor == ConfigIndex(titleTask)) {
-    s_create_config = true;
+    // The menu state holds so the title keeps drawing under the veil. The
+    // update hook flips to the child state once the veil lands.
+    s_config_fade = ConfigFade::TitleOut;
+    bd::ui::ScreenFade::Get().FadeTo(1.0f, kFadeOutSeconds);
     s_title_task_addr = titleTask;
-    task->state = kTitleStateChildRunning;
     return true;
   }
 
@@ -394,6 +410,18 @@ REX_HOOK_RAW(TitleTask_Update) {
     }
   }
 
+  auto &fade = bd::ui::ScreenFade::Get();
+
+  // The outgoing veil landed: only now does the title stop drawing its menu,
+  // so the child state's bare backdrop is never visible.
+  if (s_config_fade == ConfigFade::TitleOut && fade.IsOpaque()) {
+    task->state = kTitleStateChildRunning;
+    s_create_config = true;
+    s_config_fade = ConfigFade::Hold;
+  }
+  if (s_config_fade == ConfigFade::Lift && fade.IsClear())
+    s_config_fade = ConfigFade::None;
+
   // Handle pending close first so a reinstall can register fresh VFS state.
   if (s_config_closing) {
     s_config_closing = false;
@@ -407,8 +435,14 @@ REX_HOOK_RAW(TitleTask_Update) {
 
     bd::engine::UnregisterVFS();
 
-    if (wantsRestart)
+    if (wantsRestart) {
+      // The rebuilt menu comes back up under the veil it went down under.
       s_create_config = true;
+      s_config_fade = ConfigFade::Hold;
+    } else {
+      fade.FadeTo(0.0f, kFadeInSeconds);
+      s_config_fade = ConfigFade::Lift;
+    }
   }
 
   if (s_create_config) {
@@ -422,6 +456,8 @@ REX_HOOK_RAW(TitleTask_Update) {
       BD_ERROR("[config] Create failed, restoring the menu state");
       task->state = kTitleStateMenu;
       bd::engine::UnregisterVFS();
+      fade.FadeTo(0.0f, kFadeInSeconds);
+      s_config_fade = ConfigFade::Lift;
     } else {
       task->state = kTitleStateChildRunning;
     }
@@ -429,9 +465,31 @@ REX_HOOK_RAW(TitleTask_Update) {
 
   if (s_config_menu.IsActive()) {
     s_config_menu.Update(ctx, base);
-    if (s_config_menu.IsClosing())
-      s_config_closing = true;
+
+    // The load is done: lift the veil off the finished screen.
+    if (s_config_fade == ConfigFade::Hold && s_config_menu.IsOnScreen()) {
+      fade.FadeTo(0.0f, kFadeInSeconds);
+      s_config_fade = ConfigFade::Lift;
+    }
+
+    // The exit fades the screen back to black first; the teardown above runs
+    // once the veil lands, and the title comes back under it.
+    if (s_config_menu.IsClosing()) {
+      if (s_config_fade != ConfigFade::ConfigOut) {
+        fade.FadeTo(1.0f, kFadeOutSeconds);
+        s_config_fade = ConfigFade::ConfigOut;
+      }
+      if (fade.IsOpaque()) {
+        s_config_closing = true;
+        s_config_fade = ConfigFade::Hold;
+      }
+    }
   } else {
+    // Held still under an opaque or landing veil: no input reaches the rows
+    // it covers, and the swap happens between frames the player can see.
+    if (s_config_fade == ConfigFade::TitleOut ||
+        s_config_fade == ConfigFade::Hold)
+      return;
     NavigateNoSaveMenu(titleTask);
     HoverTitleRows(titleTask);
     __imp__TitleTask_Update(ctx, base);

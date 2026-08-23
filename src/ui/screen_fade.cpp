@@ -19,22 +19,31 @@ ScreenFade &ScreenFade::Get() {
 }
 
 void ScreenFade::FadeTo(f32 target, f32 seconds) {
-  target_.store(std::clamp(target, 0.0f, 1.0f));
-  rate_.store(seconds > 0.0f ? 1.0f / seconds : 0.0f);
+  std::lock_guard lock(mutex_);
+  target_ = std::clamp(target, 0.0f, 1.0f);
+  rate_ = seconds > 0.0f ? 1.0f / seconds : 0.0f;
   if (seconds <= 0.0f)
-    level_.store(target_.load());
+    level_ = target_;
+}
+
+bool ScreenFade::IsOpaque() const {
+  std::lock_guard lock(mutex_);
+  return level_ >= 1.0f;
+}
+
+bool ScreenFade::IsClear() const {
+  std::lock_guard lock(mutex_);
+  return level_ <= 0.0f;
 }
 
 f32 ScreenFade::Step(f32 dt) {
-  const f32 target = target_.load();
-  f32 level = level_.load();
-  if (level == target)
-    return level;
-  const f32 sweep = rate_.load() * dt;
-  level = level < target ? std::min(level + sweep, target)
-                         : std::max(level - sweep, target);
-  level_.store(level);
-  return level;
+  std::lock_guard lock(mutex_);
+  if (level_ == target_)
+    return level_;
+  const f32 sweep = rate_ * dt;
+  level_ = level_ < target_ ? std::min(level_ + sweep, target_)
+                            : std::max(level_ - sweep, target_);
+  return level_;
 }
 
 FadeOverlay::FadeOverlay(rex::ui::ImGuiDrawer *drawer)

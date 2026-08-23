@@ -99,14 +99,17 @@ bool s_create_config = false;
 bool s_config_closing = false;
 u32 s_title_task_addr = 0;
 
-// Screen-fade sequencing around the config child. The title fades to black
-// before it stops drawing, the veil holds while the config task loads or
-// tears down, and it lifts once what is under it is on screen, so neither the
-// bare child-state backdrop nor a popping menu is ever visible.
-enum class ConfigFade { None, TitleOut, Hold, Lift, ConfigOut };
+// Screen-fade sequencing around the config child. Entering, the title fades
+// to black and the config screen cuts in the instant it is up. Leaving, the
+// veil snaps to black on the press and then lifts off the title in a fade.
+// Either way it holds over the load, so neither the bare child-state backdrop
+// nor a popping menu is ever visible.
+enum class ConfigFade { None, TitleOut, Hold, Lift };
 ConfigFade s_config_fade = ConfigFade::None;
 constexpr f32 kFadeOutSeconds = 0.20f;
 constexpr f32 kFadeInSeconds = 0.25f;
+// A zero sweep lands the veil on the frame it is asked for.
+constexpr f32 kInstant = 0.0f;
 
 // Registered id of the engine "DebugMenu" sequence, resolved once at the title.
 // It is only registered when devmode was on at boot.
@@ -466,23 +469,18 @@ REX_HOOK_RAW(TitleTask_Update) {
   if (s_config_menu.IsActive()) {
     s_config_menu.Update(ctx, base);
 
-    // The load is done: lift the veil off the finished screen.
+    // The load is done: the finished screen cuts in from under the veil.
     if (s_config_fade == ConfigFade::Hold && s_config_menu.IsOnScreen()) {
-      fade.FadeTo(0.0f, kFadeInSeconds);
-      s_config_fade = ConfigFade::Lift;
+      fade.FadeTo(0.0f, kInstant);
+      s_config_fade = ConfigFade::None;
     }
 
-    // The exit fades the screen back to black first; the teardown above runs
-    // once the veil lands, and the title comes back under it.
-    if (s_config_menu.IsClosing()) {
-      if (s_config_fade != ConfigFade::ConfigOut) {
-        fade.FadeTo(1.0f, kFadeOutSeconds);
-        s_config_fade = ConfigFade::ConfigOut;
-      }
-      if (fade.IsOpaque()) {
-        s_config_closing = true;
-        s_config_fade = ConfigFade::Hold;
-      }
+    // The exit cuts to black on the press. The teardown above runs on the
+    // next pass and the title fades up from under the veil it landed on.
+    if (s_config_menu.IsClosing() && s_config_fade != ConfigFade::Hold) {
+      fade.FadeTo(1.0f, kInstant);
+      s_config_closing = true;
+      s_config_fade = ConfigFade::Hold;
     }
   } else {
     // Held still under an opaque or landing veil: no input reaches the rows

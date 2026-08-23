@@ -114,8 +114,16 @@ public:
   static void RequestResize();
 
   // The engine unbinds bound surfaces without telling us, so every mirror
-  // naming the dying texture would dangle.
-  static void NotifyTextureDestroyed(GuestTexture *dead);
+  // naming the dying texture would dangle. retire_bindings=false keeps the
+  // framebuffer entries and bindless slot for a surface headed to the
+  // SurfacePool; the caller owes RetireTextureBindings if pooling falls
+  // through.
+  static void NotifyTextureDestroyed(GuestTexture *dead,
+                                     bool retire_bindings = true);
+
+  // Drop a texture's framebuffer cache entries and its bindless slot
+  // (fence-deferred). Takes state().mutex.
+  static void RetireTextureBindings(GuestTexture *tex);
 
   // Teardown runs when the recording frame slot is reused, after its fence is
   // awaited, so no in-flight command list still references the resource.
@@ -557,6 +565,7 @@ bool BuildPresentSemaphores(VideoState &s);
 u32 AllocateSlot(VideoState &s);
 u32 BindTextureSRVLocked(VideoState &s, GuestTexture *tex);
 void ReleaseTextureSRVLocked(VideoState &s, GuestTexture *tex);
+void RetireTextureBindingsLocked(VideoState &s, GuestTexture *dead);
 // Null-rewrite and free every slot parked in descriptor_graveyard[slot].
 // Callable only once that slot's fence has been awaited (DrainSlot entry).
 void DrainDescriptorSlotsLocked(VideoState &s, u32 slot);

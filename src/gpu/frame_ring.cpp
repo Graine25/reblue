@@ -27,6 +27,7 @@
 #include "gpu/host_resource_heap.h"
 #include "gpu/native_texture_mirror.h"
 #include "gpu/physical_buffers.h"
+#include "gpu/surface_pool.h"
 
 namespace bd::gpu {
 
@@ -180,6 +181,7 @@ void DrainSlot(VideoState &s, u32 slot) {
   {
     BD_CPU_ZONE("DrainSurfaceReturns");
     DrainPooledSurfaceReturns(s, slot);
+    SurfacePool::Tick();
   }
   auto dead = s.deferred_destroy[slot].Take();
   // Mark the whole batch first: a materialize during one texture's teardown

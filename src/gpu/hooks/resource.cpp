@@ -7,9 +7,6 @@
  * @license   BSD 3-Clause License
  *            See LICENSE file in the project root for full license text.
  */
-#include <algorithm>
-#include <atomic>
-#include <chrono>
 #include <cstring>
 #include <mutex>
 #include <unordered_set>
@@ -51,9 +48,6 @@ bd::gpu::GuestTexture *D3DDevice_CreateSurface_hook(u32 width, u32 height,
                                                     u32 format,
                                                     u32 multi_sample,
                                                     u32 params_va) {
-  const plume::RenderFormat plume_format = bd::gpu::ConvertGuestFormat(format);
-  const bool is_depth = bd::gpu::IsDepthFormat(plume_format);
-
   // Honor BD's MSAA request (only its scene color + depth pass
   // multi_sample!=0).
   const plume::RenderSampleCounts msaa_count =
@@ -62,122 +56,10 @@ bd::gpu::GuestTexture *D3DDevice_CreateSurface_hook(u32 width, u32 height,
           ? bd::gpu::Video::CvarMSAASampleCount()
           : plume::RenderSampleCount::COUNT_1;
 
-  // Reuse a parked surface of identical dims (skips the ~400us committed D3D12
-  // allocation, and the engine recreates ~19/frame). Pool only holds surfaces
-  // whose release fence signalled, so reuse is GPU-safe.
-  if (auto *pooled = bd::gpu::SurfacePool::Acquire(
-          width, height, static_cast<u32>(plume_format),
-          static_cast<u32>(msaa_count), is_depth)) {
-    bd::gpu::InitResourceHeader(pooled->x360.as_surface.resource,
-                                bd::gpu::D3DResourceType::kSurface);
-    bd::gpu::Video::ScrubPooledSurfaceLinks(pooled);
-    pooled->sourceSurface = nullptr;
-    pooled->destinationTextures.clear();
-    pooled->resolveScale = 1.0f;
-    pooled->resolveLevel = 0;
-    pooled->resolveFace = 0;
-    pooled->resolveSourceFallback = false;
-    pooled->surfaceDrawn = false;
-    pooled->pendingDestroy = false; // parked RT/DS survive Free and are reused
-    pooled->pendingGPURead =
-        false; // DrainPooledSurfaceReturns already cleared it
-    // BindDrawFramebuffer keys the composite chain seed on layout==UNKNOWN to
-    // detect a fresh tile, and a pooled surface's stale layout skips the seed
-    // so the scene goes dark. Advisory shadow only, so this can't mis-barrier.
-    pooled->layout = plume::RenderTextureLayout::UNKNOWN;
-    if (pooled->texture && !is_depth) {
-      bd::gpu::Video::BindTextureSRV(pooled);
-    }
-    return pooled;
-  }
-
-  const auto miss_t0 = std::chrono::steady_clock::now();
-
-  auto *surface = bd::gpu::HostResourceHeap::Alloc<bd::gpu::GuestTexture>(
-      is_depth ? bd::gpu::ResourceType::DepthStencil
-               : bd::gpu::ResourceType::RenderTarget);
-  if (!surface) {
-    BD_ERROR("CreateSurface: host resource heap exhausted");
-    return nullptr;
-  }
-
-  bd::gpu::InitResourceHeader(surface->x360.as_surface.resource,
-                              bd::gpu::D3DResourceType::kSurface);
-
-  plume::RenderTextureDesc desc;
-  desc.dimension = plume::RenderTextureDimension::TEXTURE_2D;
-  desc.width = width;
-  desc.height = height;
-  desc.depth = 1;
-  desc.mipLevels = 1;
-  desc.arraySize = 1;
-  desc.format = plume_format;
-  desc.flags = is_depth ? plume::RenderTextureFlag::DEPTH_TARGET
-                        : plume::RenderTextureFlag::RENDER_TARGET;
-  desc.multisampling.sampleCount = msaa_count;
-  // Force committed: shared heap placement leaves undefined contents that D3D12
-  // GBV fills with a neon-green debug pattern (see CreateTexture_hook).
-  desc.committed = true;
-
-  auto *device = bd::gpu::Video::HostDevice();
-  if (device) {
-    surface->textureHolder =
-        bd::gpu::CreateHostTexture(device, desc, "rt-surface");
-    surface->texture = surface->textureHolder.get();
-    // Sampleable view for the per-Present RT->back buffer blit. Depth surfaces
-    // skip registration because copy_color samples color.
-    if (surface->texture && !is_depth) {
-      plume::RenderTextureViewDesc view_desc;
-      view_desc.format = plume_format;
-      view_desc.dimension = plume::RenderTextureViewDimension::TEXTURE_2D;
-      view_desc.mipLevels = 1;
-      surface->textureView = surface->texture->createTextureView(view_desc);
-      bd::gpu::Video::BindTextureSRV(surface);
-    }
-  } else {
-    BD_ERROR("CreateSurface fired before Video host device exists");
-  }
-  surface->width = width;
-  surface->height = height;
-  surface->format = plume_format;
-  surface->guestFormat = format;
-  surface->viewDimension = plume::RenderTextureViewDimension::TEXTURE_2D;
-  // SetRenderTarget propagates this into pipelineState.sampleCount, and PSO +
-  // resolve need the real count.
-  surface->sampleCount = desc.multisampling.sampleCount;
-
-  // A pool miss is a committed D3D12 alloc, and the slow ones cost whole
-  // frames. A first-use key is unavoidable cold start, a key that has parked
-  // before re-allocating is churn, and only churn warrants a warning.
-  const double miss_ms = std::chrono::duration<double, std::milli>(
-                             std::chrono::steady_clock::now() - miss_t0)
-                             .count();
-  if (miss_ms > 1.0) {
-    static std::atomic<u32> s_logged{0};
-    if (s_logged.fetch_add(1, std::memory_order_relaxed) < 48) {
-      const auto info = bd::gpu::SurfacePool::DescribeMiss(
-          width, height, static_cast<u32>(plume_format),
-          static_cast<u32>(msaa_count), is_depth);
-      if (info.ever_parked) {
-        BD_WARN("SurfacePool miss {:.2f}ms {}x{} fmt={} msaa={} {} {:.1f} MiB "
-                "(key: hit={} miss={} lru_evict={} | pool: "
-                "parked={} {:.0f} MiB evicted_lru={} percap={})",
-                miss_ms, width, height, static_cast<u32>(plume_format),
-                static_cast<u32>(msaa_count), is_depth ? "DS" : "RT",
-                info.key_bytes / 1048576.0, info.key_hits, info.key_misses,
-                info.key_evicted_lru, info.free_count,
-                info.parked_bytes / 1048576.0, info.evicted_lru,
-                info.rejected_percap);
-      } else {
-        BD_DEBUG("SurfacePool cold alloc {:.2f}ms {}x{} fmt={} msaa={} {} "
-                 "{:.1f} MiB (first use of key)",
-                miss_ms, width, height, static_cast<u32>(plume_format),
-                static_cast<u32>(msaa_count), is_depth ? "DS" : "RT",
-                info.key_bytes / 1048576.0);
-      }
-    }
-  }
-  return surface;
+  // Pooled reuse of the same-dim scratch surfaces the engine recreates every
+  // frame, fresh committed alloc on miss. Reuse is fence-gated, so GPU-safe.
+  return bd::gpu::SurfacePool::Acquire(width, height, format,
+                                       static_cast<u32>(msaa_count));
 }
 
 // D3DDevice_CreateTexture is __stdcall and returns D3DBaseTexture*:

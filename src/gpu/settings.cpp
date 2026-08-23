@@ -135,7 +135,7 @@ REXCVAR_DEFINE_INT32(bd_diag_verbosity, 0, kCvarGroup,
 
 REXCVAR_DEFINE_INT32(bd_surface_pool_budget_mb, 0, kCvarGroup,
                      "VRAM the render-target pool may hold parked, in MiB. "
-                     "0 = auto (a quarter of adapter VRAM, 512-2048 MiB). "
+                     "0 = auto (a quarter of adapter VRAM, 512-6144 MiB). "
                      "Lower trades allocation hitches for VRAM headroom.")
     .range(0, 8192);
 

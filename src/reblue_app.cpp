@@ -235,10 +235,10 @@ void ApplyReblueCvarDefaults() {
       {"keybind_left_trigger", "Z"},
       {"keybind_right_trigger", "F"},
       {"keybind_left_shoulder", "E"},
-      {"keybind_lstick_up", "W,Ctrl+W"},
-      {"keybind_lstick_down", "S,Ctrl+S"},
-      {"keybind_lstick_left", "A,Ctrl+A"},
-      {"keybind_lstick_right", "D,Ctrl+D"},
+      {"keybind_lstick_up", "W"},
+      {"keybind_lstick_down", "S"},
+      {"keybind_lstick_left", "A"},
+      {"keybind_lstick_right", "D"},
       // Paired with E on the other shoulder. Left unbound the sheet would be
       // drawing an RB prompt over a key that does nothing, and the shop pager
       // and leader cycle would be half reachable.

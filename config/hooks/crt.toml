@@ -1,0 +1,45 @@
+[rexcrt]
+CreateFileA        = 0x8248B780
+ReadFile           = 0x8248CBF8
+WriteFile          = 0x8248B500
+SetFilePointer     = 0x8248B3B8
+GetFileSize        = 0x8248CDA8
+GetFileSizeEx      = 0x8248E688
+SetEndOfFile       = 0x8248B310
+FlushFileBuffers   = 0x826E1D98
+DeleteFileA        = 0x8248B6C8
+CloseHandle        = 0x8248B2D8
+FindFirstFileA     = 0x8248DC60
+FindNextFileA      = 0x8248DCF0
+CreateDirectoryA   = 0x8248D678
+MoveFileA          = 0x8248BE98
+SetFileAttributesA = 0x8248D598
+
+RtlAllocateHeap    = 0x824694A0
+RtlFreeHeap        = 0x82469D88
+RtlSizeHeap        = 0x82468738
+RtlReAllocateHeap  = 0x8246A070
+
+memcpy             = 0x826BF770
+memmove            = 0x826C0480
+memset             = 0x826BFCF0
+memchr             = 0x826C27F0
+XMemCpy            = 0x8248BAD0
+XMemSet128         = 0x8248B968
+memset_vmx         = 0x8248D228
+memcpy_s           = 0x826BED98
+memmove_s          = 0x826BEE70
+
+strncmp            = 0x826BF4F0
+strncpy            = 0x826C0D98
+strchr             = 0x826C1860
+strstr             = 0x826C1D60
+strrchr            = 0x826C1DE0
+strtok             = 0x826C1740
+_stricmp           = 0x826C5620
+strcpy_s           = 0x826C7A70
+lstrlenA           = 0x8248D570
+lstrcpyA           = 0x8248D4D0
+lstrcpynA          = 0x8248D4F0
+lstrcatA           = 0x8248D538
+lstrcmpiA          = 0x8248D440

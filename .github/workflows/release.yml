@@ -1,17 +1,101 @@
 name: Release
 
+# Push a v* tag and it builds every platform, then publishes the tag as a
+# release. A tag with a suffix (v0.5.0-rc1) publishes as a prerelease.
+# workflow_dispatch builds the same five jobs without publishing.
+
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      sdk_ref:
+        description: "rexglue-sdk release: latest-nightly, latest-stable, or an explicit tag"
+        required: false
+        type: string
+        default: latest-nightly
 
 permissions:
   contents: write
   actions: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build:
-    uses: ./.github/workflows/_build.yml
+  resolve:
+    uses: ./.github/workflows/_resolve.yml
     with:
-      publish_mode: release
+      sdk_ref: ${{ inputs.sdk_ref || 'latest-nightly' }}
     secrets: inherit
+
+  verify:
+    needs: resolve
+    runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - name: Match the tag against the project version
+        id: tag
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          case "${TAG}" in
+            "v${VERSION}")   echo "prerelease=false" >> "${GITHUB_OUTPUT}" ;;
+            "v${VERSION}-"*) echo "prerelease=true"  >> "${GITHUB_OUTPUT}" ;;
+            *)
+              echo "::error::tag ${TAG} does not match project version ${VERSION}; expected v${VERSION} or v${VERSION}-<suffix>"
+              exit 1
+              ;;
+          esac
+
+  windows:
+    needs: [resolve, verify]
+    uses: ./.github/workflows/_build-windows.yml
+    with:
+      sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
+      asset_base: ${{ needs.resolve.outputs.asset_base }}
+    secrets: inherit
+
+  linux:
+    needs: [resolve, verify]
+    uses: ./.github/workflows/_build-linux.yml
+    with:
+      sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
+      asset_base: ${{ needs.resolve.outputs.asset_base }}
+    secrets: inherit
+
+  macos:
+    needs: [resolve, verify]
+    uses: ./.github/workflows/_build-macos.yml
+    with:
+      sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
+      asset_base: ${{ needs.resolve.outputs.asset_base }}
+    secrets: inherit
+
+  publish:
+    needs: [resolve, verify, windows, linux, macos]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: reblue v${{ needs.resolve.outputs.version }}
+          prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          files: artifacts/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

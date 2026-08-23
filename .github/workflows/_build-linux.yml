@@ -1,0 +1,124 @@
+name: Build Linux
+
+# amd64 and arm64, each an AppImage. Both arches build inside a 24.04 container
+# so glibc is pinned instead of following whatever the runner image moves to.
+# 24.04 is the floor the SDK sets: its binaries need GLIBC_2.38. Step bodies
+# live in .github/scripts.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit-ish to build (empty = the caller's ref)"
+        required: false
+        type: string
+        default: ""
+      sdk_tag:
+        description: "rexglue-sdk release tag to build against"
+        required: true
+        type: string
+      asset_base:
+        description: "Asset name stem, from _resolve.yml"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  SDK_REPO: rexglue/rexglue-sdk
+  SDK_TAG: ${{ inputs.sdk_tag }}
+  ASSETS_REPO: zolaware/reblue-assets
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            appimage_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            appimage_arch: aarch64
+    name: linux-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ubuntu:24.04
+    env:
+      PRESET: linux-${{ matrix.arch }}-release
+      SDK_SLICE: linux-${{ matrix.arch }}
+      COMPILER_LAUNCHER: ccache
+      DEBIAN_FRONTEND: noninteractive
+      MAX_GLIBC: "2.39"
+      MAX_GLIBCXX: "3.4.33"
+    steps:
+      # Inline because it has to run before the checkout that brings the
+      # scripts in: actions/checkout needs git for submodules and git-lfs for
+      # the assets repo.
+      - name: Bootstrap container
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git git-lfs ca-certificates
+          git lfs install --skip-repo
+          git config --global --add safe.directory '*'
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      - name: Checkout game assets
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.ASSETS_REPO }}
+          token: ${{ secrets.ASSETS_TOKEN }}
+          path: assets
+          lfs: true
+
+      - name: Install toolchain
+        run: bash .github/scripts/install-linux-toolchain.sh
+
+      # Placed after the toolchain step, which apt-installs ccache. The action
+      # only installs one when it cannot find one, and the bare container has no
+      # sudo for it to install with.
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          key: linux-${{ matrix.arch }}
+
+      - name: Fetch ReXGlue SDK (${{ inputs.sdk_tag }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/fetch-sdk.sh
+
+      - name: Fetch aarch64 dxc
+        if: matrix.arch == 'arm64'
+        run: bash .github/scripts/fetch-dxc-arm64.sh
+
+      - name: Configure
+        run: bash .github/scripts/configure.sh
+
+      - name: Codegen
+        run: cmake --build --preset "${PRESET}" --target reblue_codegen
+
+      - name: Reconfigure (pick up generated/sources.cmake)
+        run: bash .github/scripts/configure.sh
+
+      - name: Build
+        run: cmake --build --preset "${PRESET}" -j
+
+      - name: Package AppImage
+        env:
+          OUT_FILE: ${{ inputs.asset_base }}-${{ matrix.appimage_arch }}.AppImage
+          APPIMAGE_ARCH: ${{ matrix.appimage_arch }}
+        run: bash .github/scripts/package-appimage.sh
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: reblue-linux-${{ matrix.arch }}
+          path: dist/*.AppImage
+          if-no-files-found: error

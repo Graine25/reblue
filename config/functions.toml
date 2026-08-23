@@ -1,11 +1,12 @@
 [functions]
-0x8210F1D8 = { name = "mgMS__helper_F1D8" }
+0x82576028 = { name = "bdPhysicalVertexBufferCreate" }
+0x82575F90 = { name = "bdPhysicalIndexBufferCreate" }
 0x820C03A0 = { name = "SequenceHolder_SequenceUnitBase_ctor", size = 0x80 }
 0x820C0428 = { name = "SequenceHolder_SequenceUnit_ctor", size = 0x7C }
 0x820C04A8 = { name = "SequenceUnit_vf01_InvokeFactory", size = 0x68 }
 0x820C0510 = { name = "SequenceHolder_RegisterSequence" }
 0x820C0588 = { name = "SequenceUnitBase_vf00_Destructor", size = 0x44 }
-0x820C06B8 = { name = "bdLoadGame", size = 0x380 }
+0x820C06B8 = { name = "bdRegisterMainSequences", size = 0x380 }
 0x820C0A38 = { name = "bdDebugMenuSetup", size = 0x444 }
 0x820C0E80 = { name = "SequenceHolder_SequenceUnitBase_dtor", size = 0x70 }
 0x820C0EF0 = { name = "bdSequenceSystemInit", size = 0x284 }
@@ -91,6 +92,7 @@
 0x820E4288 = { name = "bdMatrix4x4Copy", size = 0x84 }
 0x820F7068 = { name = "bdDefaultRenderFunc", size = 0x8 }
 0x820F8C08 = { name = "bdMechaSuitParameterLoadStep", size = 0xD4 }
+0x8210F1D8 = { name = "mgMS__helper_F1D8" }
 0x8211B4B8 = { name = "bdForEachVisualCallback", size = 0x68 }
 0x8211BD48 = { name = "bdVisualSetAlpha", size = 0xD8 }
 0x8211BE20 = { name = "bdVisualSetColor", size = 0x50 }
@@ -153,14 +155,17 @@
 0x8212BEF0 = { name = "D2AnimeTask_Draw", size = 0xF0 }
 0x8212CDE8 = { name = "AnimeMenu_FindChildByName", size = 0xE0 }
 0x8212CEC8 = { name = "D2AnimeTask_SetVisibleAndPlay" }
+0x8212D4D0 = { name = "WString__Assign" }
 0x8212D8C8 = { name = "AnimeMenu_SetItemUvVar", size = 0x6C }
 0x8212D938 = { name = "AnimeMenu_SetItemPosVar", size = 0x6C }
 0x8212D9A8 = { name = "AnimeVar_helper_D9A8", size = 0x6C }
 0x8212DA18 = { name = "AnimeMenu_SetItemFloatVar", size = 0x6C }
 0x8212DA88 = { name = "AnimeMenu_SetItemWStringPtrVar", size = 0x6C }
 0x8212DEE0 = { name = "AnimeVar_helper_DEE0", size = 0x1EC }
-0x8212E740 = { name = "rex_UCodeToNativeConstantTable", size = 0x1C }
 0x8212F260 = { name = "bdMoviePlayerInit", size = 0x364 }
+0x8212FC18 = { name = "bdMovieFrameUpdate", size = 0x144 }
+0x8212FD60 = { name = "bdMovieFrameConvert", size = 0x134 }
+0x82130020 = { name = "bdMovieYuvQuadDraw", size = 0x30C }
 0x82130C40 = { name = "bdSoundSetVolume", size = 0x114 }
 0x82130D58 = { name = "bdSoundStartWithVolume", size = 0x144 }
 0x82130EA0 = { name = "bdSoundStartWithCurrentVolume", size = 0xC8 }
@@ -186,8 +191,10 @@
 0x82132740 = { name = "bdUpdateMemoryStats", size = 0x190 }
 0x821328D0 = { name = "bdRenderOverlayEffects", size = 0x318 }
 0x82132BE8 = { name = "bdRenderStep", size = 0x334 }
+0x82132F20 = { name = "VisualRender__ctor", size = 0xCDC }
 0x82133D58 = { name = "bdBuildGammaRampLUT", size = 0x218 }
 0x82133F70 = { name = "bdFrameSubmitAndDebugHUD", size = 0xE70 }
+0x82134DE0 = { name = "bdCameraViewSetScreenSize" }
 0x82134F08 = { name = "bdCameraViewInit", size = 0x128 }
 0x82135030 = { name = "bdCameraViewFrustumTest", size = 0xF8 }
 0x82135128 = { name = "bdCameraViewSetMatrix", size = 0x80 }
@@ -273,11 +280,22 @@
 0x82145E70 = { name = "bdResourceFileRequest", size = 0x8C }
 0x82145F00 = { name = "bdAssetSlotCheckLoaded", size = 0x54 }
 0x82145F58 = { name = "bdAssetSlotRelease", size = 0x4C }
+0x82146048 = { name = "VisualTexture__RequestTexlist" }
+0x821460A8 = { name = "VisualTexture__PollLoadState" }
+0x82146140 = { name = "Visual__Prim__ctor", size = 0xB0 }
 0x821463A8 = { name = "Visual__SelectRenderTarget", size = 0x80 }
+0x82146428 = { name = "bdPrimBegin", size = 0x170 }
+0x821466A8 = { name = "bdPrimSetTexture", size = 0x74 }
+0x821467A0 = { name = "bdPrimPushVertex2D", size = 0xC8 }
+0x82146AB8 = { name = "bdPrimEnd", size = 0x1BC }
+0x821474A0 = { name = "bdPrimDrawRect2D", size = 0xF4 }
+0x82147700 = { name = "bdPrimDrawRectRotated", size = 0x15C }
 0x82146C78 = { name = "bdDrawPrimitive", size = 0x108 }
 0x82146D88 = { name = "bdSetViewportConstants", size = 0xDC }
 0x82146E68 = { name = "bdRenderSubmitList", size = 0x634 }
 0x82147E60 = { name = "Visual__method_7E60", size = 0xF8 }
+0x82149F28 = { name = "bdIsDownloadPackageInstalled", size = 0xEC }
+0x8214A018 = { name = "bdCheckDownloadContentAvailable", size = 0x104 }
 0x8214A120 = { name = "bdResolveDownloadPath", size = 0xCC }
 0x8214AB78 = { name = "bdSoundEffectBankLoad", size = 0x564 }
 0x8214B938 = { name = "bdFieldVoiceSoundBankLoad", size = 0x254 }
@@ -453,15 +471,19 @@
 0x8216C530 = { name = "AnimeData_helper_C530", size = 0x68 }
 0x8216ED28 = { name = "bdCollisionRaycast", size = 0x50 }
 0x8216EF60 = { name = "bdUvAnimInit", size = 0xB4 }
+0x8216F018 = { name = "bdUiCharUvCacheInit" }
 0x8216FA58 = { name = "bd_Error_vf00", size = 0x68 }
 0x8216FAC0 = { name = "bd_Error_vf03", size = 0x1C4 }
 0x82170B28 = { name = "bdFindEntityByHandle", size = 0x64 }
-0x82171950 = { name = "bdPhysicsBakeUpdate", size = 0xB84 }
+0x82171950 = { name = "bdSoundCueUpdate", size = 0xB84 }
 0x821724D8 = { name = "bdSoundCueLock", size = 0x58 }
 0x82172830 = { name = "bdSoundCuePlay", size = 0xD8 }
 0x821734E8 = { name = "bdGpuBufferSetup", size = 0x94 }
 0x82173580 = { name = "bdShaderConstantFlush", size = 0xC0 }
 0x82175028 = { name = "bdShadowMapDebugSetup", size = 0x114 }
+0x82177DA0 = { name = "bdBuildMirrorViewProjection" }
+0x82178610 = { name = "bdPlaneReflectUpdateTexture" }
+0x8217ACF0 = { name = "LoadTexture__vf03", size = 0x68 }
 0x8217B970 = { name = "bdLoadModelDataCallback", size = 0x1C0 }
 0x8217C130 = { name = "bdSoundPackLoad", size = 0x248 }
 0x8217D410 = { name = "bdSoundFindCueByName", size = 0xC8 }
@@ -517,18 +539,21 @@
 0x821831D8 = { name = "bdRenderPassSetTextureState", size = 0x84 }
 0x82183260 = { name = "bdGetCurrentRenderTarget", size = 0x60 }
 0x821832C0 = { name = "bdGetNextRenderTarget", size = 0x64 }
+0x82183910 = { name = "Visual__Shader__Toon__vf04", size = 0x7C }
 0x82183B88 = { name = "bdGetDoubleBufferPtr", size = 0x68 }
 0x82183BF0 = { name = "bdOcclusionQueryCreate", size = 0xAC }
 0x82183EC0 = { name = "bdLightScatterDraw", size = 0x4B8 }
 0x82184378 = { name = "bdSceneSubmitRenderList", size = 0xF4 }
 0x82184470 = { name = "bdResolveAndSetRenderTarget", size = 0x130 }
 0x821845A0 = { name = "bdSceneNodeSetupRenderPass", size = 0x178 }
-0x82184898 = { name = "bdMaterialApplyTextures", size = 0xE4 }
+0x82184898 = { name = "bdEffectSlotArrayApply", size = 0xE4 }
 0x82184E90 = { name = "bdRenderViewSubmit", size = 0x19AC }
 0x821869F0 = { name = "bdShaderSystemBeginFrame", size = 0xBC }
 0x82186AB0 = { name = "bdSceneNodeSubmitRenderList", size = 0x60 }
 0x82186B10 = { name = "bdShaderSystemFlush", size = 0x8C }
+0x82187AB0 = { name = "Visual__UnitCubeReflect__vf03", size = 0x1B4 }
 0x82189230 = { name = "bdRenderQueueMarkDirty", size = 0x50 }
+0x8218A3E0 = { name = "bdLightListUpdateSnapshot" }
 0x8218B888 = { name = "AnimeData_method_B888", size = 0x180 }
 0x8218BA98 = { name = "bdAnimClipLookup", size = 0x78 }
 0x8218BC48 = { name = "AnimeData_method_BC48", size = 0x6C }
@@ -540,6 +565,7 @@
 0x82190588 = { name = "bdSoundBankPrepare", size = 0x1EC }
 0x82190778 = { name = "bdSoundBankPlay", size = 0x180 }
 0x821908F8 = { name = "bdSoundBankPlayCue", size = 0x370 }
+0x82190D48 = { name = "PadVibrationCore__vf03" }
 0x82192410 = { name = "bdFindMaxElement", size = 0x64 }
 0x82192550 = { name = "bdStringBufferFree", size = 0x58 }
 0x821983E8 = { name = "bdHdbFileInit", size = 0x134 }
@@ -552,22 +578,23 @@
 0x82199ED0 = { name = "bdHdbByteSwapFirstTableHeader", size = 0x120 }
 0x82199FF0 = { name = "bdHdbHeaderParseSwapped", size = 0xD4 }
 0x8219A118 = { name = "bdMessageImportConstruct", size = 0x154 }
-0x8219BBB8 = { name = "bdBattleSystemDestructor", size = 0x1B4 }
-0x8219BD70 = { name = "bdBattleSceneResourceLoad", size = 0xC9C }
+0x8219BBB8 = { name = "ScriptManTask__dtor", size = 0x1B4 }
+0x8219BD70 = { name = "ScriptManTask__vf01_Init", size = 0xC9C }
 0x8219D608 = { name = "bdMapEventTrigger", size = 0xFC }
-0x8219D708 = { name = "bdBattleSystemUpdate", size = 0x36F4 }
+0x8219D708 = { name = "ScriptManTask__vf02_Update", size = 0x36F4 }
 0x821A0E98 = { name = "bdScriptCharFindAnimEntry", size = 0xDC }
 0x821A0F78 = { name = "bdFieldHUDUpdate", size = 0x13D4 }
+0x821A2410 = { name = "ScriptManTask__UnloadScript" }
 0x821A3340 = { name = "bdScriptSceneInit", size = 0x15C }
 0x821A34A0 = { name = "bdBattleDataCopyEntry", size = 0x60 }
-0x821A3CA8 = { name = "bdScriptCharSetAnimation", size = 0xBC }
+0x821A3CA8 = { name = "bdScriptCharSetStatus", size = 0xBC }
 0x821A3D68 = { name = "bdFieldCharSetAnimPause", size = 0x7C }
 0x821A3DE8 = { name = "bdScriptOpenChoiceMenu", size = 0x244 }
 0x821A4030 = { name = "bdScriptCloseChoiceMenu", size = 0x50 }
 0x821A4168 = { name = "bdFieldActionIconDestroy", size = 0x64 }
 0x821A41D0 = { name = "bdBattleEndTransition", size = 0xF8 }
 0x821A42C8 = { name = "bdFieldActionIconUpdate", size = 0x7F4 }
-0x821A4AC0 = { name = "bdBattleSetState", size = 0x110 }
+0x821A4AC0 = { name = "bdBattleEncounterBegin", size = 0x110 }
 0x821A4BD0 = { name = "bdFieldSetEntityVisibility", size = 0x2E4 }
 0x821A5198 = { name = "bdScriptLoadAreaSounds", size = 0x19C }
 0x821A57F8 = { name = "bdScriptOpScreenFade", size = 0x100 }
@@ -615,7 +642,7 @@
 0x821B5430 = { name = "bdScriptOpSetVariable", size = 0x3AC }
 0x821B57E0 = { name = "bdScriptOpGiveItem", size = 0x464 }
 0x821B5C48 = { name = "bdScriptOpGiveGold", size = 0x26C }
-0x821B5EB8 = { name = "bdScriptOpGiveItem2", size = 0x2C0 }
+0x821B5EB8 = { name = "bdScriptOpMedalChange", size = 0x2C0 }
 0x821B6178 = { name = "bdScriptOpConditionalCheck", size = 0x480 }
 0x821B65F8 = { name = "bdScriptOpConditionalBranch", size = 0x1B8 }
 0x821B67B0 = { name = "bdShopDataLoad", size = 0x264 }
@@ -642,6 +669,7 @@
 0x821BECD8 = { name = "bdLoadEventPack", size = 0xA8 }
 0x821BF050 = { name = "bdScriptOpQuestPatch", size = 0x1B0 }
 0x821C2E78 = { name = "bdShopTaskConstruct", size = 0x368 }
+0x821CA0B0 = { name = "Shop__MainTask__UpdateCount" }
 0x821CE1D8 = { name = "gsContentInfoFile_vf00", size = 0x5C }
 0x821CE238 = { name = "gsContentFileManager_StartEnumeration", size = 0x16C }
 0x821CE3B0 = { name = "gsContentEnumerator_ThreadMain", size = 0x210 }
@@ -660,7 +688,7 @@
 0x821CFAA8 = { name = "gsContentInfoReader_vf00", size = 0x78 }
 0x821CFB20 = { name = "gsContentInfoFile_ReadInfoTxt", size = 0x150 }
 0x821D03D0 = { name = "bdSceneSpeedReset", size = 0x144 }
-0x821D0518 = { name = "bdBattleSystemInit", size = 0x608 }
+0x821D0518 = { name = "bdBattleMotionTestSetup", size = 0x608 }
 0x821D33E8 = { name = "bdBattleCameraCreate", size = 0x1CC }
 0x821D3630 = { name = "bdBattleCameraFinalize", size = 0x70 }
 0x821D3988 = { name = "bdBattleMotionTestLoad", size = 0x440 }
@@ -670,6 +698,8 @@
 0x821D6820 = { name = "bdCsvReadFieldW", size = 0x1C0 }
 0x821D9550 = { name = "bdBtlMotionScriptDatabaseConstruct", size = 0x450 }
 0x821DAD58 = { name = "bdBattleEffectInit", size = 0x228 }
+0x821DDC38 = { name = "CommandSelectTask__vf02" }
+0x821DF5B8 = { name = "CommandSelectTask_SetSelection" }
 0x821DF698 = { name = "bdBattleGetCurrentAnimId", size = 0x60 }
 0x821E1CC8 = { name = "bdComputeSpeedInterp", size = 0x9C }
 0x821E1D68 = { name = "bdSceneSpeedUpdate", size = 0x1D0 }
@@ -698,6 +728,7 @@
 0x821F6AA0 = { name = "AnimeData_method_6AA0", size = 0x7C }
 0x821F72E0 = { name = "bdCutsceneEventProcess", size = 0x2D8 }
 0x821F8098 = { name = "bdCutsceneCommandDispatchVtable", size = 0xB8 }
+0x821F9B48 = { name = "bdFieldEncounterMenuUpdate", size = 0x3E4 }
 0x821FB668 = { name = "bdPreBattleSetup", size = 0x2F0 }
 0x821FFBB0 = { name = "bdEnemyTeamConstruct", size = 0x214 }
 0x82201F00 = { name = "bdEnemySpawnPosition", size = 0xAC4 }
@@ -740,8 +771,10 @@
 0x82234400 = { name = "bdBattleSceneResultProcess", size = 0x3C0 }
 0x822347C0 = { name = "bdBattleSceneActionDispatch" }
 0x82237298 = { name = "bdBattleSceneActionStep" }
+0x822364D8 = { name = "bdBattleTargetSelectInput" }
 0x8223E360 = { name = "bdBattleCheckEntityFlag", size = 0x80 }
 0x8223E3E0 = { name = "bdBattleCommandInputCheck", size = 0x1C4 }
+0x8223E5A8 = { name = "bdBattleTargetRefreshHighlights" }
 0x82243850 = { name = "bdMiniMapDraw", size = 0x80 }
 0x82247C10 = { name = "bdBattleCameraConstruct", size = 0x240 }
 0x82248840 = { name = "bdBattleCameraTaskCreate" }
@@ -837,6 +870,7 @@
 0x82275FE8 = { name = "bdMatrixSetRotation", size = 0x43C }
 0x82276E18 = { name = "bdMatrixApplyScaling", size = 0x54 }
 0x822770A0 = { name = "bdVec3TransformByMatrix", size = 0x5C }
+0x82277A28 = { name = "bdViewCameraUpdate" }
 0x8227D960 = { name = "bdSceneNodeBuildTransform", size = 0x6C }
 0x8227D9D0 = { name = "bdInitInputSystem", size = 0x17C }
 0x8227DBD0 = { name = "bdSceneGraphBuildTreeA", size = 0x18C }
@@ -845,6 +879,7 @@
 0x8227E790 = { name = "bdSceneGraphBuild", size = 0x21C }
 0x8227E9B0 = { name = "hcgVertexDeclarationRelease", size = 0x234 }
 0x8227ED50 = { name = "bdSceneGraphFindNodeByName", size = 0xA4 }
+0x8227F1D8 = { name = "bdSceneNodeDrawIndexed" }
 0x8227FEE8 = { name = "bdSceneNodeDrawSingle", size = 0x1E3C }
 0x82282410 = { name = "bdBoneInitUnskinned", size = 0x80 }
 0x82282490 = { name = "bdSceneNodeCullTraverse", size = 0x178 }
@@ -853,8 +888,14 @@
 0x82284B58 = { name = "bdBoneInitSkinned", size = 0x84 }
 0x82284EE8 = { name = "bdResourceManagerInit", size = 0x1A8 }
 0x82285090 = { name = "hcgLoadTextureArray", size = 0xD0 }
+0x82285160 = { name = "hcgTextureListRelease" }
+0x82285268 = { name = "bdLookupCurrentTableTexture", size = 0x4C }
 0x822852B8 = { name = "bdLookupRenderTarget", size = 0x4C }
 0x82285308 = { name = "bdLookupAndSetRenderTarget", size = 0x58 }
+0x82285360 = { name = "hcgTextureCacheAdd" }
+0x8228B4D8 = { name = "FreeDfsTask_SetViewScreenSize" }
+0x8228C090 = { name = "FreeDfsTask_BuildViewProjection" }
+0x8228CA60 = { name = "FreeDfsTask__vf03", size = 0x21C }
 0x82285470 = { name = "hcgReadTextureFile", size = 0x1B8 }
 0x82285628 = { name = "bdAllocRenderBuffer", size = 0x1A0 }
 0x822857C8 = { name = "bdCreateTextureFromMemory", size = 0x114 }
@@ -904,23 +945,32 @@
 0x822B5998 = { name = "bdCharacterDataInit", size = 0x1DC }
 0x822B60C0 = { name = "bdParseModelNameToId", size = 0x148 }
 0x822B6308 = { name = "bdCharaModelPathResolve", size = 0x17C }
+0x822B7BD0 = { name = "Chara__ctor" }
 0x822B8188 = { name = "bdCharaModelInit", size = 0x8D8 }
 0x822B9D30 = { name = "bdCharaModelVariantCheck", size = 0xF4 }
 0x822BC9B8 = { name = "AnimeData_method_C9B8", size = 0x218 }
 0x822BCBD0 = { name = "AnimeData_method_CBD0", size = 0x1CC }
 0x822BE9B0 = { name = "bdItemModelLoad", size = 0x198 }
+0x822C04A8 = { name = "Chara_AddStatus" }
 0x822C08F8 = { name = "bdEventFindEntry", size = 0xD8 }
 0x822C1A60 = { name = "AnimeData_method_1A60", size = 0x474 }
 0x822C1F50 = { name = "bdMotionCmdLoad", size = 0x364 }
+0x822C4DC0 = { name = "Chara_SetTimedEffect" }
 0x822C61A8 = { name = "rex_BattleCharaTask_Construct", size = 0x464 }
+0x822D07C0 = { name = "bdBattleTargetIsSelectable" }
 0x822D4078 = { name = "bdCompanionModelInit", size = 0x288 }
 0x822D4638 = { name = "AnimeData_method_4638", size = 0x388 }
 0x822D4C60 = { name = "bdInputCheckDpadUp", size = 0x114 }
 0x822D4D78 = { name = "bdInputCheckDpadDown", size = 0x114 }
+0x822D4E90 = { name = "bdInputCheckDpadRight" }
+0x822D4F90 = { name = "bdInputCheckDpadLeft" }
 0x822D5090 = { name = "bdGetCurrentMapPath", size = 0x68 }
 0x822D50F8 = { name = "bdGameConfigInit", size = 0x430 }
 0x822D5528 = { name = "bdGetFontLineHeight", size = 0x5C }
 0x822D5588 = { name = "bdCampConfigDataLoad", size = 0x134 }
+0x822D5988 = { name = "Camp__Config__MainTask__BuildRows" }
+0x822D69E8 = { name = "Camp__Config__MainTask__vf02", size = 0x64 }
+0x822D6A50 = { name = "bdCampConfigSetState", size = 0x5AC }
 0x822D7728 = { name = "bdCampMainTaskConstruct", size = 0x3F4 }
 0x822DAD50 = { name = "bdCampDataTaskConstruct", size = 0x458 }
 0x822DF550 = { name = "bdCampItemLoad", size = 0x128 }
@@ -928,14 +978,21 @@
 0x822E43C0 = { name = "bdEquipItemStatUpdate", size = 0x578 }
 0x822E5360 = { name = "bdEquipScreenSetup", size = 0x57C }
 0x822E6978 = { name = "bdCampRankConstruct", size = 0x200 }
+0x822E6F40 = { name = "Camp__Rank__MainTask__vf02" }
+0x822E76F8 = { name = "CampRank_UpdateCursorPosName" }
+0x822E77B0 = { name = "CampRank_ApplySlotUVs" }
 0x822E84B0 = { name = "bdCampShowSkillLoad", size = 0x208 }
 0x822E90F0 = { name = "bdCampMagicLoad", size = 0xC8 }
 0x822EB840 = { name = "bdCampWarpLoad", size = 0x104 }
 0x822EBB28 = { name = "AnimeVar_Pos_dtor_2", size = 0xA8 }
 0x822EDA68 = { name = "bdCampReviewLoad", size = 0x104 }
 0x822F0D90 = { name = "bdCampDiaryLoad", size = 0x170 }
-0x822F8458 = { name = "bdEnemyCharaConstruct", size = 0x1B4 }
+0x822F14A8 = { name = "CampDiary__OpenSubScreen" }
+0x822F7258 = { name = "Camp_Shadow_BindSkillClassWindow" }
+0x822F8458 = { name = "RecObjTask__ctor", size = 0x1B4 }
 0x822FA8B8 = { name = "bdItemModelProcessStep", size = 0x7A0 }
+0x822FB058 = { name = "CampDiary__SetState" }
+0x822FF590 = { name = "Gmk__ReactGim__vf13" }
 0x823075D0 = { name = "bdGimmickActModelPathBuild", size = 0x7C }
 0x82307650 = { name = "bdGimmickModelPathResolve", size = 0x434 }
 0x82308E70 = { name = "bdGimmickPackLoad", size = 0xB8 }
@@ -952,6 +1009,9 @@
 0x82355A00 = { name = "SaveDataTask_ParseSlotData", size = 0x24C }
 0x82355CD0 = { name = "bdLoadGameTask_Update", size = 0x8D0 }
 0x823565A0 = { name = "bdSaveGameLoad", size = 0x1EC }
+0x82356A30 = { name = "bdPlayerSaveRestore", size = 0x34C }
+0x82356E70 = { name = "Chara_CopyStatBlock" }
+0x823572A0 = { name = "bdSaveBlockRestoreConfig", size = 0x208 }
 0x823575F0 = { name = "bdLoadGameTask", size = 0x70 }
 0x82357B50 = { name = "bdItemSetTableLoad", size = 0x1D8 }
 0x82357D28 = { name = "bdFlagListLoad", size = 0x21C }
@@ -959,6 +1019,9 @@
 0x823580D8 = { name = "bdBookshelfTableLoad", size = 0x1DC }
 0x82358B20 = { name = "bdBgmPlayerConstruct", size = 0x44C }
 0x8235B998 = { name = "bdContentTaskConstruct", size = 0x278 }
+0x8235C908 = { name = "ContentTask__OnDeviceSelected", size = 0x88 }
+0x8235CA70 = { name = "bdSaveBlockCapture", size = 0x504 }
+0x8235CFE0 = { name = "ContentTask__CheckForAnySavedGame", size = 0xB8 }
 0x8235D250 = { name = "bdFieldCommonAssetRegister", size = 0x480 }
 0x8235DC30 = { name = "bdFieldGetNpcById", size = 0xD8 }
 0x8235ECF8 = { name = "bdGetDiscForStage", size = 0x174 }
@@ -1008,8 +1071,10 @@
 0x82382E68 = { name = "SaveDataTask_vf03_Draw", size = 0x7C }
 0x82382EE8 = { name = "SaveDataTask_OnSlotConfirm", size = 0x138 }
 0x82383020 = { name = "bdSaveGameWrite", size = 0x39C }
+0x823833C0 = { name = "bdSaveGameWriteThumbnail", size = 0xC4 }
 0x82383488 = { name = "SaveDataTask_vf04", size = 0x68 }
 0x823834F0 = { name = "SaveDataTask_ShowSavingMessage", size = 0xBC }
+0x823835B0 = { name = "bdPlayerSaveSerialize", size = 0x200 }
 0x823842D8 = { name = "SelWinTask_ctor", size = 0x17C }
 0x82384458 = { name = "SelWinTask_vf00", size = 0x74 }
 0x823844D0 = { name = "SelWinTask_vf01", size = 0x2C8 }
@@ -1028,8 +1093,11 @@
 0x82386AA0 = { name = "AnimeMenu_SetItemNarrowStringVar", size = 0x11C }
 0x82386BC0 = { name = "AnimeMenu_SetItemWideStringVar", size = 0x10C }
 0x82387140 = { name = "bdModelFileLoadStart", size = 0x60 }
+0x82387DA8 = { name = "PathExtensionEquals" }
 0x82388000 = { name = "bdCrc32", size = 0x70 }
 0x82388070 = { name = "bdTimerReadElapsed" }
+0x82388208 = { name = "isk__StrList__Add" }
+0x823884C0 = { name = "isk__StrList__ScanDirectory" }
 0x823892C0 = { name = "bdBattleSceneDestructor" }
 0x82389890 = { name = "bdBattleViewerUpdate" }
 0x8238A0D8 = { name = "bdCharaModelDebugDraw", size = 0xD4C }
@@ -1045,13 +1113,24 @@
 0x82393E30 = { name = "bdMapDataInit", size = 0x2E8 }
 0x82395060 = { name = "bdMapInitCameraTableLoad", size = 0x1E4 }
 0x82398E90 = { name = "bdMapPathBuild", size = 0x1F4 }
+0x8239AFF8 = { name = "MiniMapTask__DrawWidget" }
 0x8239BA30 = { name = "bdMinimapLoad", size = 0x1AC }
-0x8239CD50 = { name = "bdMechattMapMainTaskConstruct" }
+0x8239CD50 = { name = "bdWorldMapScreenTaskConstruct" }
+0x8239D3A0 = { name = "WorldMapScreenTask__vf02_Update", size = 0x29C }
+0x8239D640 = { name = "WorldMapScreenTask__vf03", size = 0xEC }
 0x8239EA00 = { name = "bdWorldMapInit", size = 0x218 }
 0x8239ED00 = { name = "bdWorldEnvInit", size = 0x4A8 }
 0x8239FCE8 = { name = "bdWorldMapPathBuild", size = 0xD0 }
+0x823A4000 = { name = "MapManTask__DebugDrawTriggers" }
 0x823AB810 = { name = "bd_Colli_Tree_vf00", size = 0x4C }
+0x823AE140 = { name = "bdPartyAddMember", size = 0xB4 }
+0x823AE678 = { name = "bdPartySetLeader", size = 0x450 }
+0x823B2270 = { name = "Player_RecalcParams" }
+0x823B2A08 = { name = "Player_CalcBattleParams" }
+0x823B3618 = { name = "Player_ApplyPassiveEffect" }
 0x823B6528 = { name = "AnimeData_method_6528", size = 0x218 }
+0x823B6F68 = { name = "Player_TickStatusEffects" }
+0x823B76D8 = { name = "Chara_FindClassSkill" }
 0x823BD448 = { name = "bdViewCameraConstruct", size = 0x1B4 }
 0x823C36E0 = { name = "TitleTask_DebugDraw", size = 0x5E4 }
 0x823C7510 = { name = "bdViewObjectCreate", size = 0x27C }
@@ -1067,6 +1146,7 @@
 0x823F20A0 = { name = "bdEventListLoad", size = 0x2B4 }
 0x823F2568 = { name = "bdLoadEventEnvPreset", size = 0x628 }
 0x823F59E0 = { name = "bdEventSceneCreate", size = 0x1B8 }
+0x823F5CF8 = { name = "issEvent__dtor" }
 0x823F66E8 = { name = "bdEventSceneFileSetup", size = 0x180 }
 0x82405058 = { name = "Sequencer_ObjPath_vf00", size = 0x44 }
 0x824050A0 = { name = "Sequencer_Guid_vf00", size = 0x4C }
@@ -1075,6 +1155,7 @@
 0x82407148 = { name = "bdIsSpecialCharModel", size = 0xF0 }
 0x824084B8 = { name = "AnimeData_method_84B8", size = 0xB4 }
 0x8240EBA8 = { name = "AnimeData_method_EBA8", size = 0x7D8 }
+0x82410A18 = { name = "issActor__ApplySpecialModelFlags" }
 0x82413B38 = { name = "bdVoiceStreamWaveBankLoad", size = 0xE4 }
 0x82413C20 = { name = "bdEventSceneInit", size = 0x2E0 }
 0x82414530 = { name = "bdEventSceneMakeVoiceName", size = 0xBC }
@@ -1092,8 +1173,13 @@
 0x8241DF00 = { name = "Sequencer_helper_DF00", size = 0x8C0 }
 0x82421198 = { name = "bdParticleEmit", size = 0x360 }
 0x82424200 = { name = "bdParticleCurveEval", size = 0xA4 }
+0x82424AF8 = { name = "Visual__DrawSortedQueues" }
+0x82425710 = { name = "Visual__DrawVerticesUP", size = 0x138 }
 0x82429060 = { name = "bdJewelShopTaskConstruct", size = 0x5CC }
 0x82429EE0 = { name = "AnimeVar_Pos_dtor_3", size = 0x110 }
+0x82432A50 = { name = "StatusIconTex_Reset", size = 0x6B4 }
+0x82433330 = { name = "StatusIconTex_CollectPartyMembers", size = 0x7C }
+0x82433538 = { name = "StatusIconTex__DrawAilmentIcons" }
 0x82433700 = { name = "bdActionEventTaskConstruct", size = 0x184 }
 0x824340F8 = { name = "bdGameOverInit", size = 0xC4 }
 0x8243E770 = { name = "bdActEv07Construct", size = 0x714 }
@@ -1102,93 +1188,245 @@
 0x824445E8 = { name = "bdMapLookupById8", size = 0x78 }
 0x82447280 = { name = "bdParticleEffectFindById", size = 0x78 }
 0x82449DD0 = { name = "bdAssetSlotLoadStep", size = 0xA4 }
-0x82466568 = { name = "bdQueryPerformanceFrequency" }
-0x824665A0 = { name = "bdQueryPerformanceCounter" }
+0x82454030 = { name = "mcl__water_object__vf04_body" }
+0x82455418 = { name = "mcl__caustics_object__SetupEffectBuffers" }
+0x82455F58 = { name = "Gmk__parseMclObjects" }
+0x82466568 = { name = "rex_QueryPerformanceFrequency", size = 0x38 }
+0x824665A0 = { name = "rex_QueryPerformanceCounter", size = 0x20 }
+0x824665C0 = { name = "rex_RaiseException", size = 0x80 }
 0x82466640 = { name = "rex_WaitForSingleObject", size = 0x8 }
+0x824666B0 = { name = "XapiShowErrorAndWait", size = 0xB8 }
+0x82466768 = { name = "XapiLookupString", size = 0xA8 }
+0x82466810 = { name = "XapiPAL50Incompatible", size = 0x1C8 }
 0x82466BC8 = { name = "rex_WaitForSingleObjectEx", size = 0x64 }
-0x82466CC8 = { name = "bdPhysicalAlloc", size = 0x94 }
-0x82466D60 = { name = "rex_XMemFree", size = 0x18 }
+0x82466C30 = { name = "XGetOverlappedResult", size = 0x98 }
+0x82466CC8 = { name = "XMemAlloc", size = 0x94 }
+0x82466D60 = { name = "XMemFree", size = 0x18 }
 0x82466E80 = { name = "rex_NtSuspendThread", size = 0x40 }
+0x82466EC0 = { name = "rex_SetUnhandledExceptionFilter", size = 0x14 }
 0x82466EF0 = { name = "rex_XSetThreadProcessor", size = 0xB0 }
+0x82466FA0 = { name = "rex_UnhandledExceptionFilter", size = 0x90 }
 0x82467030 = { name = "rex_GetCommandLineA", size = 0xC }
+0x82467040 = { name = "rex_cinit", size = 0xE0 }
+0x82467120 = { name = "rex_rtinit", size = 0x74 }
+0x82467198 = { name = "XapiCallThreadNotifyRoutines", size = 0x60 }
+0x824671F8 = { name = "XRegisterThreadNotifyRoutine", size = 0x6C }
+0x82467328 = { name = "XapiInitHeap", size = 0xD4 }
 0x82467458 = { name = "rex_RtlSetLastError", size = 0x18 }
 0x82467470 = { name = "rex_RtlSetLastNTError", size = 0x34 }
 0x824674A8 = { name = "rex_RtlGetLastError", size = 0x20 }
-0x824674C8 = { name = "rex_XapiFormatTimeOut", size = 0x20 }
+0x824674C8 = { name = "XapiFormatTimeOut", size = 0x20 }
 0x824674E8 = { name = "rex_j_RtlGetLastError", size = 0x4 }
+0x824674F0 = { name = "rex_LocalAlloc", size = 0x44 }
 0x82467538 = { name = "rex_XPhysicalAlloc", size = 0x84 }
 0x824675C0 = { name = "rex_XPhysicalAllocEx", size = 0x6C }
 0x82467630 = { name = "rex_XPhysicalFree", size = 0xC }
 0x82467640 = { name = "rex_j_MmQueryAddressProtect", size = 0x4 }
-0x82467648 = { name = "rex__free_base", size = 0x48 }
+0x82467648 = { name = "rex_LocalFree", size = 0x48 }
 0x82467710 = { name = "rex_j_RtlSetLastNTError", size = 0x4 }
 0x82467718 = { name = "rex_RtlpCreateUnCommittedRange", size = 0x1C0 }
 0x824678D8 = { name = "rex_RtlpInsertUnCommittedPages", size = 0x120 }
 0x824679F8 = { name = "rex_RtlpFindAndCommitPages", size = 0x28C }
 0x82467C88 = { name = "rex_RtlpCoalesceFreeBlocks", size = 0x404 }
-0x82468090 = { name = "rex_RtlpDeCommitFreeBlock", size = 0x134 }
+0x82468090 = { name = "rex_RtlpInsertFreeBlock", size = 0x134 }
 0x824681C8 = { name = "rex_RtlpGrowBlockInPlace", size = 0x570 }
 0x82468738 = { name = "rex_RtlSizeHeap", size = 0xA8 }
 0x824687E0 = { name = "rex_RtlpInitializeHeapSegment", size = 0x168 }
 0x82468948 = { name = "rex_RtlpExtendHeap", size = 0x23C }
-0x82468B88 = { name = "rex_RtlpDeCommitRange", size = 0x360 }
-0x824694A0 = { name = "rex_RtlAllocateHeap", size = 0x8DC }
-0x82469D88 = { name = "rex_RtlFreeHeap", size = 0x2DC }
-0x8246A070 = { name = "rex_RtlReAllocateHeap", size = 0x8B4 }
+0x82468B88 = { name = "rex_RtlpDeCommitFreeBlock", size = 0x360 }
+0x82468EF0 = { name = "rex_RtlCreateHeap", size = 0x5A4 }
+0x824694A0 = { name = "rex_RtlAllocateHeap", size = 0x894 }
+0x82469D88 = { name = "rex_RtlFreeHeap", size = 0x294 }
+0x8246A070 = { name = "rex_RtlReAllocateHeap", size = 0x83C }
 0x8246A928 = { name = "rex__get_heap_handle", size = 0xC }
 0x8246A938 = { name = "rex_j_RtlSetLastError", size = 0x4 }
-0x8246AAB0 = { name = "rex_gpuPresentSwapBuffers", size = 0x188 }
-0x8246AC38 = { name = "rex_gpuCommandBufferSubmit", size = 0x620 }
-0x8246B408 = { name = "rex_gpuRingBufferPollReady" }
-0x8246B538 = { name = "rex_gpuDeviceSetResolution" }
-0x8246B5E8 = { name = "rex_gpuDeviceEndFrame" }
-0x8246B710 = { name = "rex_Direct3D_CreateDevice" }
-0x8246B8A0 = { name = "rex_XGSurfaceSize", size = 0x70 }
-0x8246D540 = { name = "rex_D3DDevice_CreateSurface" }
-0x8246D668 = { name = "rex_D3DSurface_GetDesc" }
-0x8246D788 = { name = "rex_D3DDevice_SetRenderTarget" }
-0x8246DE10 = { name = "rex_gpuRingBufferAlloc" }
-0x8246E100 = { name = "rex_gpuRingBufferSubmitBatch" }
-0x8246E618 = { name = "rex_gpuRingBufferWaitForSpace", size = 0xC8 }
-0x8246EC50 = { name = "rex_gpuRingBufferFlush" }
-0x8246EF88 = { name = "rex_gpuRingBufferInit" }
-0x82470D90 = { name = "rex_D3DDevice_BeginFrame" }
-0x824728A8 = { name = "rex_D3DDevice_SetHiControl" }
-0x82472B48 = { name = "rex_D3DDevice_SetMipBias" }
-0x82472B68 = { name = "rex_D3DDevice_SetRTInfo" }
-0x82473548 = { name = "rex_D3DDevice_SetScissorRect" }
-0x82473610 = { name = "rex_D3DDevice_SetViewport" }
-0x82473838 = { name = "rex_D3DDevice_SetDepthStencilSurface" }
-0x82473960 = { name = "rex_D3DDevice_SetFrontBuffer" }
-0x82473D78 = { name = "rex_D3DDevice_SetRenderTargetInternal" }
-0x82474388 = { name = "rex_D3DDevice_SetRenderTargetInternal_thunk" }
-0x82477A78 = { name = "rex_PIXEndCapture", size = 0x2F8 }
-0x82478468 = { name = "rex_PIXCreateCaptureFiles", size = 0x364 }
-0x82478FE8 = { name = "rex_D3DDevice_Resolve" }
-0x8247BEC8 = { name = "rex_D3DDevice_SetSamplerState" }
-0x8247BF68 = { name = "rex_D3DDevice_SetPixelShader" }
-0x8247C130 = { name = "bdInitGpuResourceDesc", size = 0xF8 }
-0x8247C228 = { name = "rex_D3DDevice_SetVertexShader" }
-0x8247C3F8 = { name = "rex_D3DDevice_SetVertexDeclaration" }
-0x8247C418 = { name = "hcgCreateVertexDeclaration", size = 0xE0 }
-0x8247C4F8 = { name = "rex_D3DDevice_InitSamplerPoints" }
-0x8247D840 = { name = "hcgCreatePixelShaderResource", size = 0xF4 }
-0x8247D938 = { name = "hcgCreateGpuResource", size = 0xCC }
-0x8247DA58 = { name = "rex_FlushDirtyConstants" }
-0x824825F0 = { name = "rex_D3DQuery_Issue" }
-0x824827F0 = { name = "rex_D3DQuery_GetData" }
-0x82482DB0 = { name = "rex_FlushSamplerState" }
-0x824833D0 = { name = "rex_FlushConstants" }
-0x82485378 = { name = "rex_BeginTilingEx" }
-0x82485418 = { name = "rex_EndTilingEx" }
-0x82485910 = { name = "rex_WriteGPURegisters" }
-0x82485DD8 = { name = "rex_FlushDirtyRegisters" }
-0x82485E98 = { name = "rex_CommitSamplerState" }
-0x82486018 = { name = "rex_FlushFetchConstants" }
-0x82486178 = { name = "rex_FlushConstantRange" }
-0x82486F20 = { name = "rex_FlushShaderState" }
-0x82489B90 = { name = "rex_D3DDevice_Clear" }
-0x82489F40 = { name = "bdClearHelper", size = 0xBC }
+0x8246AAB0 = { name = "D3DDevice_SynchronizeToPresentationInterval", size = 0x188 }
+0x8246AC38 = { name = "D3DDevice_Swap", size = 0x620 }
+0x8246B4E0 = { name = "D3DDevice_Release", size = 0x54 }
+0x8246B600 = { name = "D3DDevice_UnsetAll", size = 0x110 }
+0x8246B710 = { name = "Direct3D_CreateDevice", size = 0xB4 }
+0x8246B8A0 = { name = "XGSurfaceSize", size = 0x70 }
+0x8246D420 = { name = "D3DDevice_CreateTexture", size = 0x120 }
+0x8246D540 = { name = "D3DDevice_CreateSurface", size = 0x128 }
+0x8246D788 = { name = "D3DDevice_SetTexture", size = 0x178 }
+0x8246E800 = { name = "D3DDevice_BlockOnFence", size = 0x1C }
+0x8246ED38 = { name = "D3DDevice_InsertFence", size = 0x34 }
+0x8246ED70 = { name = "D3DDevice_IsFencePending", size = 0x78 }
+0x8246EEB8 = { name = "D3DDevice_BlockUntilIdle", size = 0x74 }
+0x8246EF88 = { name = "D3DDevice_SetRingBufferParameters", size = 0x3FC }
+0x82471320 = { name = "D3DDevice_SetRenderState_CullMode", size = 0x1C }
+0x82471350 = { name = "D3DDevice_SetRenderState_FillMode", size = 0x1C }
+0x82471380 = { name = "D3DDevice_SetRenderState_AlphaTestEnable", size = 0x2C }
+0x824713C0 = { name = "D3DDevice_SetRenderState_AlphaBlendEnable", size = 0x80 }
+0x82471450 = { name = "D3DDevice_SetRenderState_BlendOp", size = 0x7C }
+0x824714E0 = { name = "D3DDevice_SetRenderState_SrcBlend", size = 0x7C }
+0x82471570 = { name = "D3DDevice_SetRenderState_DestBlend", size = 0x7C }
+0x82471600 = { name = "D3DDevice_SetRenderState_BlendOpAlpha", size = 0x5C }
+0x82471670 = { name = "D3DDevice_SetRenderState_SrcBlendAlpha", size = 0x5C }
+0x824716E0 = { name = "D3DDevice_SetRenderState_DestBlendAlpha", size = 0x5C }
+0x82471750 = { name = "D3DDevice_SetRenderState_SeparateAlphaBlendEnable", size = 0x84 }
+0x824717E8 = { name = "D3DDevice_SetRenderState_AlphaRef", size = 0x34 }
+0x82471820 = { name = "D3DDevice_GetRenderState_AlphaRef", size = 0x2C }
+0x82471850 = { name = "D3DDevice_SetRenderState_AlphaFunc", size = 0x1C }
+0x82471880 = { name = "D3DDevice_SetRenderState_BlendFactor", size = 0x98 }
+0x82471918 = { name = "D3DDevice_GetRenderState_BlendFactor", size = 0x80 }
+0x82471998 = { name = "D3DDevice_SetRenderState_ZEnable", size = 0x40 }
+0x824719E0 = { name = "D3DDevice_SetRenderState_ZWriteEnable", size = 0x1C }
+0x82471A10 = { name = "D3DDevice_SetRenderState_ZFunc", size = 0x2C }
+0x82471A50 = { name = "D3DDevice_SetRenderState_StencilEnable", size = 0x40 }
+0x82471A98 = { name = "D3DDevice_SetRenderState_TwoSidedStencilMode", size = 0x2C }
+0x82471AD8 = { name = "D3DDevice_SetRenderState_StencilFunc", size = 0x1C }
+0x82471B08 = { name = "D3DDevice_SetRenderState_StencilFail", size = 0x2C }
+0x82471B48 = { name = "D3DDevice_SetRenderState_StencilZFail", size = 0x2C }
+0x82471B88 = { name = "D3DDevice_SetRenderState_StencilPass", size = 0x1C }
+0x82471BB8 = { name = "D3DDevice_SetRenderState_CCWStencilFunc", size = 0x1C }
+0x82471BE8 = { name = "D3DDevice_SetRenderState_CCWStencilFail", size = 0x2C }
+0x82471C28 = { name = "D3DDevice_SetRenderState_CCWStencilZFail", size = 0x2C }
+0x82471C68 = { name = "D3DDevice_SetRenderState_CCWStencilPass", size = 0x1C }
+0x82471C98 = { name = "D3DDevice_SetRenderState_StencilRef", size = 0x14 }
+0x82471CB8 = { name = "D3DDevice_SetRenderState_StencilMask", size = 0x14 }
+0x82471CD8 = { name = "D3DDevice_SetRenderState_StencilWriteMask", size = 0x14 }
+0x82471CF8 = { name = "D3DDevice_SetRenderState_CCWStencilRef", size = 0x14 }
+0x82471D18 = { name = "D3DDevice_SetRenderState_CCWStencilMask", size = 0x14 }
+0x82471D38 = { name = "D3DDevice_SetRenderState_CCWStencilWriteMask", size = 0x14 }
+0x82471D58 = { name = "D3DDevice_SetRenderState_ClipPlaneEnable", size = 0x3C }
+0x82471DB0 = { name = "D3DDevice_SetRenderState_SlopeScaleDepthBias", size = 0xA4 }
+0x82471E58 = { name = "D3DDevice_GetRenderState_SlopeScaleDepthBias", size = 0x1C }
+0x82471E78 = { name = "D3DDevice_SetRenderState_DepthBias", size = 0x98 }
+0x82471F20 = { name = "D3DDevice_SetRenderState_MultiSampleAntiAlias", size = 0x1C }
+0x82471F50 = { name = "D3DDevice_SetRenderState_MultiSampleMask", size = 0x18 }
+0x82471F70 = { name = "D3DDevice_SetRenderState_ColorWriteEnable", size = 0x30 }
+0x82471FA8 = { name = "D3DDevice_SetRenderState_ColorWriteEnable1", size = 0x30 }
+0x82471FE0 = { name = "D3DDevice_SetRenderState_ColorWriteEnable2", size = 0x30 }
+0x82472018 = { name = "D3DDevice_SetRenderState_ColorWriteEnable3", size = 0x30 }
+0x82472060 = { name = "D3DDevice_SetRenderState_PointSize", size = 0x4C }
+0x824720C0 = { name = "D3DDevice_SetRenderState_PointSizeMin", size = 0x44 }
+0x82472118 = { name = "D3DDevice_SetRenderState_PointSizeMax", size = 0x44 }
+0x82472170 = { name = "D3DDevice_SetRenderState_Wrap0", size = 0x28 }
+0x82472198 = { name = "D3DDevice_SetRenderState_Wrap1", size = 0x2C }
+0x824721C8 = { name = "D3DDevice_SetRenderState_Wrap2", size = 0x2C }
+0x824721F8 = { name = "D3DDevice_SetRenderState_Wrap3", size = 0x2C }
+0x82472228 = { name = "D3DDevice_SetRenderState_Wrap4", size = 0x2C }
+0x82472258 = { name = "D3DDevice_SetRenderState_Wrap5", size = 0x2C }
+0x82472288 = { name = "D3DDevice_SetRenderState_Wrap6", size = 0x2C }
+0x824722B8 = { name = "D3DDevice_SetRenderState_Wrap7", size = 0x24 }
+0x824722E0 = { name = "D3DDevice_SetRenderState_Wrap8", size = 0x28 }
+0x82472308 = { name = "D3DDevice_SetRenderState_Wrap9", size = 0x2C }
+0x82472338 = { name = "D3DDevice_SetRenderState_Wrap10", size = 0x2C }
+0x82472368 = { name = "D3DDevice_SetRenderState_Wrap11", size = 0x2C }
+0x82472398 = { name = "D3DDevice_SetRenderState_Wrap12", size = 0x2C }
+0x824723C8 = { name = "D3DDevice_SetRenderState_Wrap13", size = 0x2C }
+0x824723F8 = { name = "D3DDevice_SetRenderState_Wrap14", size = 0x2C }
+0x82472428 = { name = "D3DDevice_SetRenderState_Wrap15", size = 0x24 }
+0x824724F0 = { name = "D3DDevice_SetRenderState_ViewportEnable", size = 0x40 }
+0x82472540 = { name = "D3DDevice_SetRenderState_HighPrecisionBlendEnable", size = 0xA4 }
+0x824725F0 = { name = "D3DDevice_SetRenderState_HighPrecisionBlendEnable1", size = 0xA4 }
+0x824726A0 = { name = "D3DDevice_SetRenderState_HighPrecisionBlendEnable2", size = 0xA4 }
+0x82472750 = { name = "D3DDevice_SetRenderState_HighPrecisionBlendEnable3", size = 0xA4 }
+0x82472800 = { name = "D3DDevice_SetRenderState_MinTessellationLevel", size = 0x24 }
+0x82472838 = { name = "D3DDevice_SetRenderState_MaxTessellationLevel", size = 0x24 }
+0x82472870 = { name = "D3DDevice_SetRenderState_TessellationMode", size = 0x24 }
+0x824728A8 = { name = "D3DDevice_SetRenderState_HalfPixelOffset", size = 0x24 }
+0x824728E0 = { name = "D3DDevice_SetRenderState_PrimitiveResetEnable", size = 0x1C }
+0x82472910 = { name = "D3DDevice_SetRenderState_PrimitiveResetIndex", size = 0x14 }
+0x82472930 = { name = "D3DDevice_SetRenderState_AlphaToMaskEnable", size = 0x1C }
+0x82472960 = { name = "D3DDevice_SetRenderState_AlphaToMaskOffsets", size = 0x1C }
+0x82472980 = { name = "D3DDevice_GetRenderState_AlphaToMaskOffsets", size = 0x14 }
+0x82472998 = { name = "D3DDevice_SetRenderState_GuardBand_X", size = 0x24 }
+0x824729C8 = { name = "D3DDevice_SetRenderState_GuardBand_Y", size = 0x24 }
+0x824729F8 = { name = "D3DDevice_SetRenderState_DiscardBand_X", size = 0x1C }
+0x82472A20 = { name = "D3DDevice_SetRenderState_DiscardBand_Y", size = 0x24 }
+0x82472A50 = { name = "D3DDevice_SetRenderState_HiZEnable", size = 0x24 }
+0x82472A88 = { name = "D3DDevice_SetRenderState_HiStencilEnable", size = 0x1C }
+0x82472AB8 = { name = "D3DDevice_SetRenderState_HiStencilWriteEnable", size = 0x1C }
+0x82472AE8 = { name = "D3DDevice_SetRenderState_HiStencilFunc", size = 0x1C }
+0x82472B18 = { name = "D3DDevice_SetRenderState_HiStencilRef", size = 0x14 }
+0x82472B68 = { name = "D3DDevice_SetSamplerState_MinFilter", size = 0xC0 }
+0x82472C28 = { name = "D3DDevice_GetSamplerState_MinFilter", size = 0x30 }
+0x82472C58 = { name = "D3DDevice_SetSamplerState_MinFilterZ", size = 0x88 }
+0x82472CF0 = { name = "D3DDevice_SetSamplerState_MagFilter", size = 0xC0 }
+0x82472DB0 = { name = "D3DDevice_GetSamplerState_MagFilter", size = 0x30 }
+0x82472DE0 = { name = "D3DDevice_SetSamplerState_MagFilterZ", size = 0x84 }
+0x82472E78 = { name = "D3DDevice_SetSamplerState_MipFilter", size = 0x3C }
+0x82472EB8 = { name = "D3DDevice_GetSamplerState_MipFilter", size = 0x14 }
+0x82472ED0 = { name = "D3DDevice_SetSamplerState_SeparateZFilterEnable", size = 0x88 }
+0x82472F68 = { name = "D3DDevice_SetSamplerState_MaxAnisotropy", size = 0x68 }
+0x82472FE0 = { name = "D3DDevice_SetSamplerState_AnisotropyBias", size = 0x60 }
+0x82473040 = { name = "D3DDevice_GetSamplerState_AnisotropyBias", size = 0x44 }
+0x82473088 = { name = "D3DDevice_SetSamplerState_MipMapLodBias", size = 0x60 }
+0x824730E8 = { name = "D3DDevice_GetSamplerState_MipMapLodBias", size = 0x40 }
+0x82473128 = { name = "D3DDevice_SetSamplerState_MaxMipLevel", size = 0x6C }
+0x824731A8 = { name = "D3DDevice_SetSamplerState_MinMipLevel", size = 0x6C }
+0x82473228 = { name = "D3DDevice_SetSamplerState_BorderColor", size = 0x4C }
+0x82473278 = { name = "D3DDevice_GetSamplerState_BorderColor", size = 0x1C }
+0x82473298 = { name = "D3DDevice_SetSamplerState_AddressU", size = 0x38 }
+0x824732D0 = { name = "D3DDevice_GetSamplerState_AddressU", size = 0x14 }
+0x824732E8 = { name = "D3DDevice_SetSamplerState_AddressV", size = 0x38 }
+0x82473320 = { name = "D3DDevice_GetSamplerState_AddressV", size = 0x14 }
+0x82473338 = { name = "D3DDevice_SetSamplerState_AddressW", size = 0x38 }
+0x82473370 = { name = "D3DDevice_GetSamplerState_AddressW", size = 0x14 }
+0x82473388 = { name = "D3DDevice_SetSamplerState_TrilinearThreshold", size = 0x3C }
+0x824733C8 = { name = "D3DDevice_GetSamplerState_TrilinearThreshold", size = 0x14 }
+0x824733E0 = { name = "D3DDevice_SetSamplerState_HGradientExpBias", size = 0x3C }
+0x82473420 = { name = "D3DDevice_GetSamplerState_HGradientExpBias", size = 0x18 }
+0x82473438 = { name = "D3DDevice_SetSamplerState_VGradientExpBias", size = 0x3C }
+0x82473478 = { name = "D3DDevice_GetSamplerState_VGradientExpBias", size = 0x14 }
+0x82473490 = { name = "D3DDevice_SetSamplerState_WhiteBorderColorW", size = 0x3C }
+0x824734D0 = { name = "D3DDevice_GetSamplerState_WhiteBorderColorW", size = 0x14 }
+0x824734E8 = { name = "D3DDevice_SetSamplerState_PointBorderEnable", size = 0x44 }
+0x82473530 = { name = "D3DDevice_GetSamplerState_PointBorderEnable", size = 0x18 }
+0x82473548 = { name = "D3DDevice_SetScissorRect", size = 0xC4 }
+0x82473BD8 = { name = "D3D__ResetAllState", size = 0xF4 }
+0x82473CD0 = { name = "D3D__SetSurfaceInfo", size = 0x98 }
+0x82473610 = { name = "D3DDevice_SetViewport", size = 0x228 }
+0x82473838 = { name = "D3DDevice_SetStreamSource", size = 0x124 }
+0x82473960 = { name = "D3DDevice_SetIndices", size = 0x90 }
+0x82473D78 = { name = "D3DDevice_SetRenderTarget", size = 0x330 }
+0x824740A8 = { name = "D3DDevice_SetDepthStencilSurface", size = 0x2E0 }
+0x8248A188 = { name = "D3DDevice_BeginTiling", size = 0x4F8 }
+0x8248A680 = { name = "D3DDevice_EndTiling", size = 0x4A4 }
+0x8248AB28 = { name = "D3DDevice_BeginZPass", size = 0x228 }
+0x8248AE18 = { name = "D3DDevice_EndZPass", size = 0x228 }
+0x82476270 = { name = "D3DDevice_SetScalerParametersInternal", size = 0x80 }
+0x824762F0 = { name = "D3DDevice_SetScalerParameters", size = 0x2C }
+0x82478FE8 = { name = "D3DDevice_Resolve", size = 0xDFC }
+0x8247B3A0 = { name = "XMicrocodeBuilder_StartPass", size = 0x20 }
+0x8247B3C0 = { name = "XMicrocodeBuilder_SetProgramControl", size = 0x18 }
+0x8247B920 = { name = "XMicrocodeShaderForEachInstruction", size = 0x178 }
+0x8247BB88 = { name = "D3DDevice_SetVertexShaderConstantFN", size = 0x10C }
+0x8247BC98 = { name = "D3DDevice_SetPixelShaderConstantFN", size = 0x10C }
+0x8247BDC8 = { name = "D3DDevice_SetVertexShaderConstantB", size = 0x54 }
+0x8247BE20 = { name = "D3DDevice_SetPixelShaderConstantB", size = 0x54 }
+0x8247BE78 = { name = "D3DDevice_SetVertexShaderConstantI", size = 0x4C }
+0x8247BEC8 = { name = "D3DDevice_SetPixelShaderConstantI", size = 0x4C }
+0x8247BF18 = { name = "XGGetMicrocodeShaderParts", size = 0x50 }
+0x8247BF68 = { name = "D3DDevice_SetPixelShader", size = 0x1C4 }
+0x8247C130 = { name = "XGRegisterVertexShader", size = 0xF8 }
+0x8247C228 = { name = "D3DDevice_SetVertexShader", size = 0x1CC }
+0x8247C3F8 = { name = "D3DDevice_SetVertexDeclaration", size = 0x1C }
+0x8247C418 = { name = "D3DDevice_CreateVertexDeclaration", size = 0xE0 }
+0x8247C4F8 = { name = "D3DDevice_SetShaderGPRAllocation", size = 0xAC }
+0x8247D310 = { name = "XMicrocodeBuilder_SetPDBHint", size = 0x2C }
+0x8247D388 = { name = "XMicrocodeBuilder_GetNextALUAddress", size = 0x14 }
+0x8247D3A0 = { name = "XMicrocodeBuilder_GetFlow", size = 0x30 }
+0x8247D840 = { name = "D3DDevice_CreatePixelShader", size = 0xF4 }
+0x8247D938 = { name = "D3DDevice_CreateVertexShader", size = 0xCC }
+0x8247DA08 = { name = "D3DDevice_SetFVF", size = 0x50 }
+0x8247F6E8 = { name = "XCreateMicrocodeBuilder", size = 0x4C }
+0x82480A88 = { name = "XMicrocodeBuilder_GetCurrentFlowAddress", size = 0x44 }
+0x82480AD8 = { name = "D3DResource_GetType", size = 0x8C }
+0x82481090 = { name = "D3DResource_AddRef", size = 0x74 }
+0x82481108 = { name = "D3DResource_Release", size = 0x80 }
+0x824812A0 = { name = "D3DVertexBuffer_Lock", size = 0x60 }
+0x82482BC0 = { name = "D3DDevice_SetScreenExtentQueryMode", size = 0x70 }
+0x82482DB0 = { name = "D3DDevice_SetPerfCounterEvents", size = 0x608 }
+0x824833B8 = { name = "D3DPerfCounters_IsBusy", size = 0x14 }
+0x824833D0 = { name = "D3DDevice_QueryPerfCounters", size = 0x1634 }
+0x82484A08 = { name = "D3DPerfCounters_Release", size = 0x64 }
+0x82484A70 = { name = "D3DPerfCounters_GetValues", size = 0x68 }
+0x82489B90 = { name = "D3DDevice_ClearF", size = 0x3B0 }
+0x82489F40 = { name = "D3DDevice_Clear", size = 0xBC }
+0x8248A000 = { name = "D3DDevice_SetPredication", size = 0x184 }
 0x8248B040 = { name = "rex_GetCurrentThreadId", size = 0xC }
 0x8248B1C8 = { name = "rex_GetDiskFreeSpaceExA", size = 0x110 }
 0x8248B2D8 = { name = "rex_CloseHandle", size = 0x38 }
@@ -1215,7 +1453,7 @@
 0x8248CDA8 = { name = "rex_GetFileSize", size = 0x68 }
 0x8248CE10 = { name = "rex_WideCharToMultiByte", size = 0xC0 }
 0x8248CED0 = { name = "rex_GlobalMemoryStatus", size = 0x7C }
-0x8248CF50 = { name = "rex_Sleep", size = 0x30 }
+0x8248CF50 = { name = "rex_Sleep", size = 0x8 }
 0x8248CF88 = { name = "rex_SetEvent", size = 0x3C }
 0x8248CFD0 = { name = "rex_CreateMutexA", size = 0x84 }
 0x8248D058 = { name = "rex_OutputDebugStringA", size = 0x40 }
@@ -1245,7 +1483,7 @@
 0x8248DBE0 = { name = "rex_GetSystemTime", size = 0x7C }
 0x8248DC60 = { name = "rex_FindFirstFileA", size = 0x8C }
 0x8248DCF0 = { name = "rex_FindNextFileA", size = 0x58 }
-0x8248DD48 = { name = "rex_XapiFormatObjectAttributes", size = 0x58 }
+0x8248DD48 = { name = "XapiFormatObjectAttributes", size = 0x58 }
 0x8248DDA0 = { name = "rex_CopyMisalignedCachelines", size = 0xC0 }
 0x8248DE60 = { name = "rex_CopyFileExA", size = 0x324 }
 0x8248E188 = { name = "rex_GetPartitionFreeSpace", size = 0xFC }
@@ -1254,11 +1492,11 @@
 0x8248E6E8 = { name = "rex_UnicodeToUTF8", size = 0x138 }
 0x8248E820 = { name = "rex_FindFirstFile_internal", size = 0x168 }
 0x8248E988 = { name = "rex_FindNextFile_internal", size = 0x50 }
-0x8248E9D8 = { name = "rex_SleepEx", size = 0x88 }
+0x8248E9D8 = { name = "rex_RtlSleep", size = 0x88 }
 0x8248EA60 = { name = "rex_RtlOutputDebugString", size = 0xC }
 0x8248EA70 = { name = "rex_CreateThread_wrapper", size = 0x70 }
-0x8248EAE0 = { name = "rex_CompareStringA", size = 0x1D0 }
-0x8248ECB0 = { name = "rex_XLaunchNewImage", size = 0x8C }
+0x8248EAE0 = { name = "xCompareStringA", size = 0x1D0 }
+0x8248ECB0 = { name = "XLaunchNewImage", size = 0x8C }
 0x8248ED40 = { name = "rex_XamVerifyPublisher", size = 0x68 }
 0x8248EDA8 = { name = "rex_GetProcAddress", size = 0x3C }
 0x8248EDE8 = { name = "rex_GetTimeZoneBias", size = 0x80 }
@@ -1269,195 +1507,52 @@
 0x8248F390 = { name = "rex_ReadTimeZoneConfig", size = 0x230 }
 0x8248F5C0 = { name = "rex_SystemTimeToFileTime", size = 0xA0 }
 0x8248F660 = { name = "rex_FileTimeToSystemTime", size = 0x8C }
-0x8248F6F0 = { name = "rex_D3DDevice_DrawVerticesUP" }
-0x8248FBC8 = { name = "rex_D3DDevice_DrawPrimitiveUP" }
+0x8248F6F0 = { name = "D3DDevice_BeginVertices", size = 0x4B8 }
+0x8248FBA8 = { name = "D3DDevice_EndVertices", size = 0x18 }
+0x82490030 = { name = "D3DDevice_DrawIndexedVertices", size = 0x474 }
 0x82491298 = { name = "rex_XMVector4Normalize", size = 0xB4 }
 0x82492D08 = { name = "AnimeData_helper_2D08", size = 0x1E8 }
 0x82492EF0 = { name = "AnimeData_helper_2EF0", size = 0x210 }
 0x82493100 = { name = "AnimeData_helper_3100", size = 0xB4 }
-0x82498140 = { name = "rex_BufferedStreamWrite", size = 0x218 }
+0x82496FB0 = { name = "D3DXGetTargetDescByName", size = 0xE0 }
+0x82497090 = { name = "D3DXGetTargetDescByVersion", size = 0x7C }
+0x824971A0 = { name = "D3DXGetShaderConstantTableByTarget", size = 0xE8 }
+0x82497FF8 = { name = "D3DXCompileShader", size = 0x64 }
 0x8249E488 = { name = "rex_CreateOutputFile", size = 0x90 }
 0x8249E518 = { name = "rex_LoadFileToPhysicalMemory", size = 0xF8 }
-0x82575F90 = { name = "bdPhysicalIndexBufferCreate", size = 0x94 }
-0x82576028 = { name = "bdPhysicalVertexBufferCreate", size = 0x90 }
-0x8257BA88 = { name = "rex_XShaderPDBBuilder_Release", size = 0x10 }
-0x8257BAB8 = { name = "rex_XShaderPDBBuilder_EndPass", size = 0x10 }
-0x8257EBA8 = { name = "rex_RegisterContentFile", size = 0x188 }
-0x82583D50 = { name = "rex_XConvertShaderToMicrocode", size = 0x1C0 }
-0x82665520 = { name = "rex_r400BytesPerDataElement", size = 0x68 }
-0x82665588 = { name = "rex_r400BytesPerColorElement", size = 0x64 }
-0x826655F0 = { name = "rex_r400ChannelsPerColorElement", size = 0x5C }
-0x82665650 = { name = "rex_r400BitsPerDataChannel", size = 0x198 }
-0x826657E8 = { name = "rex_r400BitsPerColorChannel", size = 0x16C }
-0x82665958 = { name = "rex_r400ArrayToDataElement", size = 0x174 }
-0x82665AD0 = { name = "rex_r400ArrayToColorElement", size = 0x38 }
-0x82665BD0 = { name = "rex_r400ZconstFromFloat", size = 0xA0 }
+0x824AD750 = { name = "D3DXFindShaderComment", size = 0x144 }
+0x825760B8 = { name = "XGOffsetBaseTextureAddress", size = 0x68 }
+0x82576120 = { name = "XGOffsetResourceAddress", size = 0xD4 }
+0x8257BA98 = { name = "XShaderPDBBuilder_Finish", size = 0x20 }
+0x8257F110 = { name = "XCreatePDBBuilder", size = 0x3C }
+0x82583D50 = { name = "XConvertShaderToMicrocode", size = 0x1C0 }
+0x8258CD88 = { name = "SSMDebugPrint", size = 0x20C }
+0x8258CF98 = { name = "SSMDebugOpenAppendFile", size = 0x50 }
+0x8258CFF0 = { name = "SSMDebugCloseFile", size = 0x30 }
+0x82598C10 = { name = "XGEstimateIdealShaderCost", size = 0xE8 }
+0x82665520 = { name = "r400BytesPerDataElement", size = 0x68 }
+0x82665588 = { name = "r400BytesPerColorElement", size = 0x64 }
+0x826655F0 = { name = "r400ChannelsPerColorElement", size = 0x5C }
+0x82665650 = { name = "r400BitsPerDataChannel", size = 0x198 }
+0x826657E8 = { name = "r400BitsPerColorChannel", size = 0x16C }
+0x82665958 = { name = "r400ArrayToDataElement", size = 0x174 }
+0x82665AD0 = { name = "r400ArrayToColorElement", size = 0x38 }
+0x82665B08 = { name = "r400AbgrToColorArray", size = 0x64 }
+0x82665BD0 = { name = "r400ZconstFromFloat", size = 0xA0 }
+0x82665C70 = { name = "r400FloatToColorInt", size = 0x500 }
+0x8267BFB0 = { name = "CSourceStream_SetFrequencyScale", size = 0x10 }
 0x8267C820 = {}
+0x8267D678 = { name = "CXenonRenderer_Process", size = 0x48 }
 0x82685A38 = {}
-0x826BCE70 = { name = "rex_GetContentDeviceState", size = 0x54 }
-0x826BCEC8 = { name = "rex_ValidateDiscNumber", size = 0x78 }
-0x826BCF40 = { name = "rex_ExtractDiscContentSignature", size = 0x74 }
-0x826BCFB8 = { name = "rex_SignalDiscSwapInProgress", size = 0x10C }
-0x826BD110 = { name = "rex_ClearDiscSwapInProgress", size = 0xA0 }
-0x826BD1B0 = { name = "rex_UnmountCdRomSymLinks", size = 0x8C }
-0x826BD240 = { name = "rex_RemountCdRomSymLinks", size = 0xE0 }
-0x826BD3B8 = { name = "rex_DismountCdRomVolume", size = 0x80 }
-0x826BD438 = { name = "rex_WaitForDiscSwapUI", size = 0x94 }
-0x826BD518 = { name = "rex_ResetContentDevice", size = 0xDC }
-0x826BD5F8 = { name = "rex_BeginDiscSwap", size = 0x78 }
-0x826BD810 = { name = "rex_CompleteDiscSwap", size = 0xA0 }
-0x826BD988 = { name = "rex_DiscSwapTerminateHandler", size = 0x7C }
-0x826BDA08 = { name = "rex_InitContentDevice", size = 0xA8 }
-0x826BDAB8 = { name = "rex_MountContentDevice", size = 0x198 }
-0x826BDD60 = { name = "rex_malloc", size = 0xC0 }
-0x826BED98 = { name = "rex_memcpy_s", size = 0xD8 }
-0x826BEE70 = { name = "rex_memmove_s", size = 0xC0 }
-0x826BEF38 = { name = "rex_free", size = 0x5C }
-0x826BEF98 = { name = "rex__malloc_base", size = 0xC8 }
-0x826BF298 = { name = "rex__sprintf", size = 0xEC }
-0x826BF388 = { name = "rex_sprintf_s", size = 0x48 }
-0x826BF3D0 = { name = "rex_srand", size = 0x30 }
-0x826BF400 = { name = "rex_rand", size = 0x44 }
-0x826BF448 = { name = "rex_wcslen", size = 0x24 }
-0x826BF470 = { name = "rex_wcscat", size = 0x38 }
-0x826BF4A8 = { name = "rex_wcscpy", size = 0x20 }
-0x826BF4C8 = { name = "rex_atol", size = 0xC }
-0x826BF4D8 = { name = "rex_atol_0", size = 0xC }
-0x826BF4F0 = { name = "rex_strncmp", size = 0x4C }
-0x826BF540 = { name = "rex_wcsstr", size = 0x78 }
-0x826BF770 = { name = "rex_memcpy", size = 0x420 }
-0x826BFB90 = { name = "rex__blkmov", size = 0xA8 }
-0x826BFCF0 = { name = "rex_memset", size = 0xA0 }
-0x826BFE50 = { name = "rex_doexit", size = 0x160 }
-0x826BFFB0 = { name = "rex_exit", size = 0xC }
-0x826C0480 = { name = "rex_memmove", size = 0xBC }
-0x826C0650 = { name = "rex__pow_special", size = 0x180 }
-0x826C07D0 = { name = "rex_pow", size = 0x500 }
-0x826C0D70 = { name = "rex___u64tod", size = 0x28 }
-0x826C0D98 = { name = "rex_strncpy", size = 0x5C }
-0x826C0DF8 = { name = "rex_ldexp", size = 0x1E4 }
-0x826C0FE0 = { name = "rex_qsort", size = 0x3C8 }
-0x826C13A8 = { name = "rex_wcscmp", size = 0x44 }
-0x826C13F8 = { name = "rex_fprintf", size = 0x240 }
-0x826C1638 = { name = "rex_atof", size = 0x100 }
-0x826C1738 = { name = "rex__atof", size = 0x8 }
-0x826C1740 = { name = "rex_strtok", size = 0x120 }
-0x826C1860 = { name = "rex_strchr", size = 0x3C }
-0x826C18A0 = { name = "rex_fmod", size = 0x184 }
-0x826C1A28 = { name = "rex_ceil", size = 0xE8 }
-0x826C1B10 = { name = "rex_atan2", size = 0x130 }
-0x826C1C90 = { name = "rex_abort", size = 0xB0 }
-0x826C1D40 = { name = "rex__controlfp", size = 0x20 }
-0x826C1D60 = { name = "rex_strstr", size = 0x7C }
-0x826C1DE0 = { name = "rex_strrchr", size = 0x58 }
-0x826C1E40 = { name = "rex_printf", size = 0x120 }
-0x826C2428 = { name = "rex_wcsncmp", size = 0x50 }
-0x826C2478 = { name = "rex_atol_1", size = 0xC }
-0x826C2488 = { name = "rex_wcschr", size = 0x40 }
-0x826C24C8 = { name = "rex_log", size = 0x17C }
-0x826C2648 = { name = "rex_log10", size = 0x2C }
-0x826C2678 = { name = "rex_copysign", size = 0x34 }
-0x826C26B0 = { name = "rex__finite", size = 0x20 }
-0x826C26D0 = { name = "rex__isnan", size = 0x44 }
-0x826C2718 = { name = "rex__fpclass", size = 0xD4 }
-0x826C27F0 = { name = "rex_memchr", size = 0x3C }
-0x826C2D18 = { name = "rex_trunc", size = 0x3C }
-0x826C30F0 = { name = "rex__sxscanf_l", size = 0xC8 }
-0x826C31B8 = { name = "rex_sscanf", size = 0x5C }
-0x826C3218 = { name = "rex_swscanf", size = 0x5C }
-0x826C3278 = { name = "rex__wxtoa", size = 0x8C }
-0x826C3308 = { name = "rex__itow", size = 0x40 }
-0x826C3348 = { name = "rex__wtof", size = 0xBC }
-0x826C3410 = { name = "rex__realloc_base", size = 0xF4 }
-0x826C3508 = { name = "rex__recalloc", size = 0x70 }
-0x826C3578 = { name = "rex_exp", size = 0xE0 }
-0x826C3728 = { name = "rex_wcsncpy", size = 0x5C }
-0x826C3920 = { name = "rex_fopen", size = 0x8 }
-0x826C3928 = { name = "rex_fclose", size = 0xB4 }
-0x826C39E8 = { name = "rex_fflush", size = 0x11C }
-0x826C3B08 = { name = "rex_rename", size = 0x4C }
-0x826C3B58 = { name = "rex_fwrite", size = 0x204 }
-0x826C3D68 = { name = "rex_fread", size = 0x11C }
-0x826C3E88 = { name = "rex__fread_nolock_s", size = 0x200 }
-0x826C4090 = { name = "rex_fread_s", size = 0x17C }
-0x826C4228 = { name = "rex__calloc_base", size = 0xD8 }
-0x826C4300 = { name = "rex_calloc", size = 0x68 }
-0x826C4F70 = { name = "rex__flush", size = 0x94 }
-0x826C5008 = { name = "rex__fflush_nolock", size = 0x78 }
-0x826C5368 = { name = "rex_isalpha", size = 0x1C }
-0x826C5388 = { name = "rex_isdigit", size = 0x1C }
-0x826C53A8 = { name = "rex_isxdigit", size = 0x1C }
-0x826C53C8 = { name = "rex_isspace", size = 0x1C }
-0x826C53E8 = { name = "rex_isalnum", size = 0x1C }
-0x826C5598 = { name = "rex_strncat", size = 0x4C }
-0x826C5620 = { name = "rex__stricmp", size = 0x54 }
-0x826C5780 = { name = "rex__strnicmp", size = 0x60 }
-0x826C57E0 = { name = "rex__strnicmp_s", size = 0xAC }
-0x826C5890 = { name = "rex_FPSCRToAbstract", size = 0x7C }
-0x826C5A78 = { name = "rex__clrfp", size = 0x30 }
-0x826C5BC8 = { name = "rex_frexp", size = 0x12C }
-0x826C6020 = { name = "rex__xtoa", size = 0x8C }
-0x826C6310 = { name = "rex_sinh", size = 0x25C }
-0x826C71A8 = { name = "rex_modf", size = 0x12C }
-0x826C75D0 = { name = "rex_strtol", size = 0x20 }
-0x826C75F0 = { name = "rex_strtoul", size = 0x20 }
-0x826C79D0 = { name = "rex__lock_file", size = 0x34 }
-0x826C7A20 = { name = "rex__unlock_file", size = 0x34 }
-0x826C7A70 = { name = "rex_strcpy_s", size = 0xE4 }
-0x826C8308 = { name = "rex__dosmaperr", size = 0x68 }
-0x826C8370 = { name = "rex__errno", size = 0x38 }
-0x826C83A8 = { name = "rex___doserrno", size = 0x38 }
-0x826C83E0 = { name = "rex__set_doserrno", size = 0x74 }
-0x826C8458 = { name = "rex__strlwr", size = 0x90 }
-0x826C84E8 = { name = "rex__strupr", size = 0x90 }
-0x826C86D0 = { name = "rex__msize", size = 0x70 }
-0x826C8740 = { name = "rex__flsbuf", size = 0x1D4 }
-0x826C89B0 = { name = "rex__write_string", size = 0x98 }
-0x826C97A0 = { name = "rex_strtoxl", size = 0x2D8 }
-0x826C9A98 = { name = "rex__set_exp", size = 0x28 }
-0x826C9AC0 = { name = "rex__get_exp", size = 0x18 }
-0x826C9AD8 = { name = "rex__add_exp", size = 0x34 }
-0x826C9B10 = { name = "rex__dclass", size = 0x84 }
-0x826C9B98 = { name = "rex__ilogb", size = 0xE4 }
-0x826C9C80 = { name = "rex__mtinitlocks", size = 0x84 }
-0x826C9D08 = { name = "rex__free_crt_tables", size = 0x6C }
-0x826C9D78 = { name = "rex__unlock", size = 0x14 }
-0x826CA170 = { name = "rex__forcdecpt_l", size = 0xA0 }
-0x826CA210 = { name = "rex__cropzeros", size = 0xB4 }
-0x826CA2C8 = { name = "rex__positive", size = 0x20 }
-0x826CA2E8 = { name = "rex__fassign_l", size = 0x5C }
-0x826CB6A8 = { name = "rex__errcode", size = 0x48 }
-0x826CB6F0 = { name = "rex__umatherr", size = 0x104 }
-0x826CB7F8 = { name = "rex__handle_qnan1", size = 0x88 }
-0x826CB880 = { name = "rex__handle_qnan2", size = 0x80 }
-0x826CBAC0 = { name = "rex__ctrlfp", size = 0x30 }
-0x826CBAF0 = { name = "rex__get_fsr", size = 0x10 }
-0x826CBB00 = { name = "rex__FPreset", size = 0x24 }
-0x826CBB24 = { name = "rex__set_statfp", size = 0x20 }
-0x826CBB44 = { name = "rex__set_fsr", size = 0x10 }
-0x826CBB54 = { name = "rex__get_fsr_0", size = 0x10 }
-0x826CBB68 = { name = "rex__stbuf", size = 0xE8 }
-0x826CBC50 = { name = "rex__ftbuf", size = 0x64 }
-0x826CBCB8 = { name = "rex__ioinit", size = 0xC8 }
-0x826CBD80 = { name = "rex__ioterm", size = 0x60 }
-0x826CBDE0 = { name = "rex__fileno", size = 0x58 }
-0x826D9DB8 = { name = "rex__fseek_nolock", size = 0xE4 }
-0x826D9EA8 = { name = "rex_fseek", size = 0xAC }
-0x826D9F60 = { name = "rex__commit", size = 0x188 }
-0x826DD220 = { name = "rex__dtold", size = 0xE0 }
-0x826DD300 = { name = "rex__fltout2", size = 0xA0 }
-0x826DD3A0 = { name = "rex__fptrap", size = 0x8 }
-0x826DEB60 = { name = "rex__mbtowc_l", size = 0x48 }
-0x826DEBA8 = { name = "rex__set_osfhnd", size = 0x88 }
-0x826DEC30 = { name = "rex__free_osfhnd", size = 0x98 }
-0x826DECC8 = { name = "rex__get_osfhandle", size = 0xCC }
-0x826DEED0 = { name = "rex__alloc_osfhnd", size = 0x27C }
-0x826DF150 = { name = "rex__chsize_nolock", size = 0x194 }
-0x826DF370 = { name = "rex__get_fmode", size = 0x68 }
+0x8268B1B8 = { name = "XMAPlaybackConsumeDecodedData", size = 0x1B4 }
+0x826E19C8 = { name = "rex_GetFileAttributesA", size = 0x64 }
+0x826E1A30 = { name = "rex_MultiByteToWideChar", size = 0xD8 }
 0x826E1B08 = { name = "rex_GetFileTime", size = 0x7C }
 0x826E1C00 = { name = "rex_GetOverlappedResult", size = 0xA8 }
 0x826E1D28 = { name = "rex_OutputDebugStringW", size = 0x6C }
 0x826E1D98 = { name = "rex_FlushFileBuffers", size = 0x3C }
+0x826E1DD8 = { name = "rex_UTF8ToUnicode", size = 0x1FC }
+0x826E51D0 = { name = "XDisassembleMicrocodeShaderRaw", size = 0x114 }
 0x826E5318 = { name = "ADXM_GotoMwIdleBorder" }
 0x826E53A8 = { name = "ADXM_MwThreadMain" }
 0x826E54B0 = { name = "ADXM_DestroyThreads" }
@@ -1481,3 +1576,37 @@
 0x82735410 = { name = "bdRegisterLoadTexfile" }
 0x82735448 = { name = "bdRegisterLoadText" }
 0x82736638 = { name = "bdResetSpeedMultipliers" }
+0x8246B5E8 = { name = "D3DDevice_ReleaseThreadOwnership" }
+0x8246B538 = { name = "D3DDevice_Reset" }
+0x824811D8 = { name = "D3DDevice_CreateVertexBuffer" }
+0x82481310 = { name = "D3DDevice_CreateIndexBuffer" }
+0x824813C0 = { name = "D3DIndexBuffer_Lock" }
+0x82481300 = { name = "D3DVertexBuffer_Unlock" }
+0x82481420 = { name = "D3DIndexBuffer_Unlock" }
+0x82480D50 = { name = "D3DResource_Lock" }
+0x82480F88 = { name = "D3DResource_Unlock" }
+0x82480B68 = { name = "D3DResource_Destroy" }
+0x8246D700 = { name = "D3DSurface_LockRect" }
+0x8246D668 = { name = "D3DSurface_GetDesc", size = 0x98 }
+0x8246C470 = { name = "D3DTexture_GetLevelDesc", size = 0x8C }
+0x8246C500 = { name = "D3DVolumeTexture_GetLevelDesc", size = 0x8C }
+0x8248FBC8 = { name = "D3DDevice_DrawVerticesUP" }
+0x8248FC28 = { name = "D3DDevice_DrawVertices", size = 0x404 }
+0x8246D1D0 = { name = "D3DTexture_GetSurfaceLevel" }
+0x824825F0 = { name = "D3DQuery_Issue" }
+0x824827F0 = { name = "D3DQuery_GetData" }
+0x8246DE10 = { name = "D3DDevice_RingBufferAlloc" }            # real: D3D::RingBufferDeviceAllocate
+0x8246E100 = { name = "D3DDevice_RingBufferSubmitBatch" }      # real: D3D::CDevice::AddCallsToPrimaryBuffer
+0x8246E618 = { name = "D3DDevice_RingBufferWaitForSpace" }     # real: D3D::CDevice::BlockOnFence
+0x8246EC50 = { name = "D3DDevice_RingBufferFlush" }            # real: D3D::CDevice::KickOff
+0x8246B408 = { name = "D3DDevice_RingBufferPollReady" }        # real: D3D::CBlocker::Check
+0x8246E018 = { name = "D3DDevice_BeginRingAlloc" }
+0x82473B00 = { name = "D3DDevice_SetGammaRamp_1" }
+0x82473A78 = { name = "D3DDevice_SetGammaRamp_0" }
+0x8246A940 = { name = "D3DDevice_SetGammaRamp" }
+
+0x820C9990 = { name = "HddCacheTask__vf01" }
+0x8246CA50 = { name = "D3DTexture_LockRect" }
+0x8246CB18 = { name = "D3D__Lock2DSurface" }
+0x8246D408 = { name = "D3DLineTexture_LockRect" }
+0x82182498 = { name = "CRI__Sofdec__RenderTask__vf03" }

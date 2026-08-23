@@ -1,0 +1,64 @@
+name: Resolve build inputs
+
+# The one place that decides what a build is: which reblue version, which
+# rexglue-sdk release, and what the artifacts are called. Every platform
+# workflow takes these as inputs so all of them agree.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit-ish to read CMakeLists.txt from (empty = the caller's ref)"
+        required: false
+        type: string
+        default: ""
+      sdk_ref:
+        description: "rexglue-sdk release tag, or 'latest-nightly' / 'latest-stable'"
+        required: false
+        type: string
+        default: latest-nightly
+      asset_tag:
+        description: "Extra name segment: reblue-<version><asset_tag>-<platform>.<ext>"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      version:
+        description: "project(reblue VERSION ...) from CMakeLists.txt"
+        value: ${{ jobs.resolve.outputs.version }}
+      sdk_tag:
+        description: "The rexglue-sdk release tag to build against"
+        value: ${{ jobs.resolve.outputs.sdk_tag }}
+      sdk_short:
+        description: "Short form of sdk_tag, for naming"
+        value: ${{ jobs.resolve.outputs.sdk_short }}
+      asset_base:
+        description: "Asset name stem: reblue-<version><asset_tag>"
+        value: ${{ jobs.resolve.outputs.asset_base }}
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      version:    ${{ steps.r.outputs.version }}
+      sdk_tag:    ${{ steps.r.outputs.sdk_tag }}
+      sdk_short:  ${{ steps.r.outputs.sdk_short }}
+      asset_base: ${{ steps.r.outputs.asset_base }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+
+      - name: Resolve
+        id: r
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_REPO: rexglue/rexglue-sdk
+          SDK_REF: ${{ inputs.sdk_ref }}
+          ASSET_TAG: ${{ inputs.asset_tag }}
+        run: bash .github/scripts/resolve.sh

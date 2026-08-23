@@ -1,0 +1,64 @@
+// Generated from cmake/embedded.h.in - do not edit.
+//
+// One entry per file under res/embed. Drop a file in that tree and it shows up
+// here on the next configure.
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
+
+@REBLUE_EMBED_DECLS@
+namespace bd {
+
+// A file compiled into the exe. 'name' is its path under res/embed, forward
+// slashes, extension included.
+struct EmbeddedAsset {
+  std::string_view name;
+  const uint8_t *data;
+  size_t size;
+
+  std::span<const uint8_t> bytes() const { return {data, size}; }
+  std::string_view text() const {
+    return {reinterpret_cast<const char *>(data), size};
+  }
+};
+
+inline constexpr EmbeddedAsset kEmbeddedAssets[] = {
+@REBLUE_EMBED_ENTRIES@};
+
+namespace detail {
+// Declared and never defined: naming it from a consteval body turns a bad
+// asset name into a compile error that says which name.
+void NoSuchEmbeddedAsset();
+} // namespace detail
+
+// The asset at 'name'. consteval, so a typo or a deleted file fails the build
+// rather than reading as an empty blob at runtime.
+consteval EmbeddedAsset Embedded(std::string_view name) {
+  for (const EmbeddedAsset &asset : kEmbeddedAssets)
+    if (asset.name == name)
+      return asset;
+  detail::NoSuchEmbeddedAsset();
+  return {};
+}
+
+// Every asset under one subdirectory. The table is sorted by name, so a
+// directory is one contiguous run of it. This is how a directory of icons
+// becomes a table with no line of CMake per icon.
+constexpr std::span<const EmbeddedAsset> EmbeddedGroup(std::string_view dir) {
+  const EmbeddedAsset *first = nullptr;
+  size_t count = 0;
+  for (const EmbeddedAsset &asset : kEmbeddedAssets) {
+    if (asset.name.size() <= dir.size() || !asset.name.starts_with(dir) ||
+        asset.name[dir.size()] != '/')
+      continue;
+    if (!first)
+      first = &asset;
+    ++count;
+  }
+  return {first, count};
+}
+
+} // namespace bd

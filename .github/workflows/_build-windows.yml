@@ -1,0 +1,105 @@
+name: Build Windows
+
+# One configure builds both runtimes, reblue.exe (D3D12) and reblue_vk.exe
+# (Vulkan), and both ship in one zip. Step bodies live in .github/scripts.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit-ish to build (empty = the caller's ref)"
+        required: false
+        type: string
+        default: ""
+      sdk_tag:
+        description: "rexglue-sdk release tag to build against"
+        required: true
+        type: string
+      asset_base:
+        description: "Asset name stem, from _resolve.yml"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  SDK_REPO: rexglue/rexglue-sdk
+  SDK_TAG: ${{ inputs.sdk_tag }}
+  ASSETS_REPO: zolaware/reblue-assets
+  PRESET: win-amd64-release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      - name: Checkout game assets
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.ASSETS_REPO }}
+          token: ${{ secrets.ASSETS_TOKEN }}
+          path: assets
+          lfs: true
+
+      - name: Install LLVM, CMake, Ninja
+        run: choco install llvm cmake ninja -y
+
+      # The preset reads $env{VCPKG_ROOT}, but the runner only exports
+      # VCPKG_INSTALLATION_ROOT.
+      - name: Point vcpkg at the preinstalled root
+        shell: pwsh
+        run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+
+      - name: Set up sccache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          variant: sccache
+          key: win-amd64
+
+      - name: Fetch ReXGlue SDK (${{ inputs.sdk_tag }})
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./.github/scripts/fetch-sdk.ps1
+
+      - name: Enter the Visual Studio environment
+        shell: pwsh
+        run: ./.github/scripts/vsdevshell.ps1
+
+      - name: Configure
+        shell: pwsh
+        run: ./.github/scripts/configure.ps1
+
+      - name: Codegen
+        run: cmake --build --preset $env:PRESET --target reblue_codegen
+
+      - name: Reconfigure (pick up generated/sources.cmake)
+        shell: pwsh
+        run: ./.github/scripts/configure.ps1
+
+      - name: Build
+        run: cmake --build --preset $env:PRESET -j
+
+      - name: sccache stats
+        if: always()
+        shell: bash
+        run: sccache --show-stats || true
+
+      - name: Package
+        shell: pwsh
+        env:
+          OUT_FILE: ${{ inputs.asset_base }}-win-amd64.zip
+        run: ./.github/scripts/package-windows.ps1
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: reblue-win-amd64
+          path: dist/*.zip
+          if-no-files-found: error

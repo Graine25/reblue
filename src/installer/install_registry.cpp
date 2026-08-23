@@ -1,80 +1,88 @@
+/**
+ * @file    installer/install_registry.cpp
+ * @copyright Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
+ *            All rights reserved.
+ * @license   BSD 3-Clause License
+ *            See LICENSE file in the project root for full license text.
+ */
 #include "installer/install_registry.h"
 
-#include <rex/platform.h>
+#include <rex/types.h>
 
-#include "bdengine/common/logging.h"
+#include "core/encoding.h"
+#include "core/logging.h"
 
-#if REX_PLATFORM_WIN32
+#if defined(_WIN32)
+#include "core/windows_lean.h"
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-
-namespace reblue {
+namespace bd::installer {
 namespace {
 
 constexpr wchar_t kInstallKey[] = L"Software\\Zolaware\\reblue\\Install";
 
-std::wstring Utf8ToWide(const std::string& s) {
-  if (s.empty()) return {};
-  int len = MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
-  std::wstring out(static_cast<size_t>(len), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), len);
-  return out;
-}
-
-std::string WideToUtf8(const std::wstring& s) {
-  if (s.empty()) return {};
-  int len = WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0,
-                                nullptr, nullptr);
-  std::string out(static_cast<size_t>(len), '\0');
-  WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), len, nullptr,
-                      nullptr);
-  return out;
-}
-
-std::optional<std::wstring> ReadString(HKEY key, const wchar_t* name) {
+std::optional<std::wstring> ReadString(HKEY key, const wchar_t *name) {
   DWORD type = 0;
   DWORD size = 0;
-  if (RegGetValueW(key, nullptr, name, RRF_RT_REG_SZ, &type, nullptr, &size) != ERROR_SUCCESS) {
+  if (RegGetValueW(key, nullptr, name, RRF_RT_REG_SZ, &type, nullptr, &size) !=
+      ERROR_SUCCESS) {
     return std::nullopt;
   }
   std::wstring out(size / sizeof(wchar_t), L'\0');
-  if (RegGetValueW(key, nullptr, name, RRF_RT_REG_SZ, &type, out.data(), &size) != ERROR_SUCCESS) {
+  if (RegGetValueW(key, nullptr, name, RRF_RT_REG_SZ, &type, out.data(),
+                   &size) != ERROR_SUCCESS) {
     return std::nullopt;
   }
-  // RegGetValueW includes the terminating null in `size` - trim it.
-  while (!out.empty() && out.back() == L'\0') out.pop_back();
+  // RegGetValueW counts the terminating null in 'size'.
+  while (!out.empty() && out.back() == L'\0')
+    out.pop_back();
   return out;
 }
 
-bool WriteString(HKEY key, const wchar_t* name, const std::wstring& value) {
+bool WriteString(HKEY key, const wchar_t *name, const std::wstring &value) {
   auto bytes = static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t));
   return RegSetValueExW(key, name, 0, REG_SZ,
-                        reinterpret_cast<const BYTE*>(value.c_str()), bytes) == ERROR_SUCCESS;
+                        reinterpret_cast<const BYTE *>(value.c_str()),
+                        bytes) == ERROR_SUCCESS;
 }
 
-}  // namespace
+} // namespace
 
 std::optional<InstallConfig> ReadInstallRegistry() {
   HKEY key = nullptr;
-  if (RegOpenKeyExW(HKEY_CURRENT_USER, kInstallKey, 0, KEY_READ, &key) != ERROR_SUCCESS) {
+  if (RegOpenKeyExW(HKEY_CURRENT_USER, kInstallKey, 0, KEY_READ, &key) !=
+      ERROR_SUCCESS) {
     return std::nullopt;
   }
-  struct KeyGuard { HKEY k; ~KeyGuard() { if (k) RegCloseKey(k); } } guard{key};
+  struct KeyGuard {
+    HKEY k;
+    ~KeyGuard() {
+      if (k)
+        RegCloseKey(k);
+    }
+  } guard{key};
 
   auto root_w = ReadString(key, L"InstallRoot");
-  if (!root_w || root_w->empty()) return std::nullopt;
+  if (!root_w || root_w->empty())
+    return std::nullopt;
 
   InstallConfig cfg;
   cfg.install_root = *root_w;
 
-  auto read_fp = [&](const wchar_t* name) -> std::string {
+  auto read_fp = [&](const wchar_t *name) -> std::string {
     auto w = ReadString(key, name);
-    return w ? WideToUtf8(*w) : std::string{};
+    return w ? bd::WideToUtf8(*w) : std::string{};
   };
-  cfg.iso1_fingerprint = read_fp(L"Disc1Fingerprint");
-  cfg.iso2_fingerprint = read_fp(L"Disc2Fingerprint");
-  cfg.iso3_fingerprint = read_fp(L"Disc3Fingerprint");
+  for (int i = 0; i < kDiscCount; ++i)
+    cfg.iso_fingerprints[i] =
+        read_fp((L"Disc" + std::to_wstring(i + 1) + L"Fingerprint").c_str());
+
+  if (auto sv = ReadString(key, L"SchemaVersion")) {
+    try {
+      cfg.schema_version = std::stoi(*sv);
+    } catch (...) {
+      cfg.schema_version = 0;
+    }
+  }
 
   const auto default_xex = cfg.game_data_path() / "default.xex";
   if (!std::filesystem::exists(default_xex)) {
@@ -86,47 +94,162 @@ std::optional<InstallConfig> ReadInstallRegistry() {
   return cfg;
 }
 
-bool WriteInstallRegistry(const InstallConfig& config) {
+bool WriteInstallRegistry(const InstallConfig &config) {
   HKEY key = nullptr;
-  LONG create_status = RegCreateKeyExW(HKEY_CURRENT_USER, kInstallKey, 0, nullptr,
-                                       REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr, &key,
-                                       nullptr);
+  LONG create_status = RegCreateKeyExW(HKEY_CURRENT_USER, kInstallKey, 0,
+                                       nullptr, REG_OPTION_NON_VOLATILE,
+                                       KEY_WRITE, nullptr, &key, nullptr);
   if (create_status != ERROR_SUCCESS) {
     BD_ERROR("RegCreateKeyExW failed: {}", create_status);
     return false;
   }
   {
-    struct KeyGuard { HKEY k; ~KeyGuard() { if (k) RegCloseKey(k); } } guard{key};
+    struct KeyGuard {
+      HKEY k;
+      ~KeyGuard() {
+        if (k)
+          RegCloseKey(k);
+      }
+    } guard{key};
 
     bool ok = true;
     ok &= WriteString(key, L"InstallRoot", config.install_root.wstring());
-    ok &= WriteString(key, L"Disc1Fingerprint", Utf8ToWide(config.iso1_fingerprint));
-    ok &= WriteString(key, L"Disc2Fingerprint", Utf8ToWide(config.iso2_fingerprint));
-    ok &= WriteString(key, L"Disc3Fingerprint", Utf8ToWide(config.iso3_fingerprint));
-    if (ok) return true;
+    for (int i = 0; i < kDiscCount; ++i)
+      ok &= WriteString(
+          key, (L"Disc" + std::to_wstring(i + 1) + L"Fingerprint").c_str(),
+          bd::Utf8ToWide(config.iso_fingerprints[i]));
+    ok &= WriteString(key, L"SchemaVersion",
+                      std::to_wstring(kInstallSchemaVersion));
+    if (ok)
+      return true;
     BD_ERROR("Failed to write one or more values to install registry");
   }
-  // Partial write - leave the key in a consistent (absent) state so
-  // ReadInstallRegistry returns nullopt and the installer re-runs.
+  // Partial write: clear so ReadInstallRegistry sees nullopt and re-runs the
+  // installer.
   ClearInstallRegistry();
   return false;
 }
 
 bool ClearInstallRegistry() {
   LONG status = RegDeleteTreeW(HKEY_CURRENT_USER, kInstallKey);
-  if (status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND) return true;
+  if (status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND)
+    return true;
   BD_ERROR("RegDeleteTreeW failed: {}", status);
   return false;
 }
 
-}  // namespace reblue
+} // namespace bd::installer
 
-#else  // non-Windows
+#else // non-Windows
 
-namespace reblue {
-std::optional<InstallConfig> ReadInstallRegistry() { return std::nullopt; }
-bool WriteInstallRegistry(const InstallConfig&) { return false; }
-bool ClearInstallRegistry() { return false; }
-}  // namespace reblue
+#include <filesystem>
+#include <fstream>
+
+#include <toml++/toml.h>
+
+#include "core/app_root.h"
+
+namespace bd::installer {
+namespace {
+
+// HKCU equivalent: a per-user TOML file that survives moving or rebuilding the
+// executable and is shared across checkouts.
+std::filesystem::path InstallStorePath() {
+  const auto base = bd::UserConfigFolder();
+  return base.empty() ? std::filesystem::path{} : base / "install.toml";
+}
+
+} // namespace
+
+std::optional<InstallConfig> ReadInstallRegistry() {
+  const auto path = InstallStorePath();
+  if (path.empty())
+    return std::nullopt;
+  std::error_code ec;
+  if (!std::filesystem::exists(path, ec))
+    return std::nullopt;
+
+  InstallConfig cfg;
+  try {
+    toml::table t = toml::parse_file(path.string());
+    cfg.install_root = t["install_root"].value_or(std::string{});
+    for (int i = 0; i < kDiscCount; ++i)
+      cfg.iso_fingerprints[i] =
+          t["disc" + std::to_string(i + 1) + "_fingerprint"].value_or(
+              std::string{});
+    cfg.schema_version = t["schema_version"].value_or(0);
+  } catch (const toml::parse_error &e) {
+    BD_WARN("Install store {} unreadable: {}", path.string(), e.what());
+    return std::nullopt;
+  }
+  if (cfg.install_root.empty())
+    return std::nullopt;
+
+  const auto default_xex = cfg.game_data_path() / "default.xex";
+  if (!std::filesystem::exists(default_xex, ec)) {
+    BD_WARN("Install store present but {} missing - treating as uninstalled",
+            default_xex.string());
+    return std::nullopt;
+  }
+  return cfg;
+}
+
+bool WriteInstallRegistry(const InstallConfig &config) {
+  const auto path = InstallStorePath();
+  if (path.empty()) {
+    BD_ERROR("Install store: neither XDG_CONFIG_HOME nor HOME is set");
+    return false;
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(path.parent_path(), ec);
+  if (ec) {
+    BD_ERROR("Install store: cannot create {}: {}", path.parent_path().string(),
+             ec.message());
+    return false;
+  }
+
+  toml::table t;
+  t.insert("install_root", config.install_root.string());
+  for (int i = 0; i < kDiscCount; ++i)
+    t.insert("disc" + std::to_string(i + 1) + "_fingerprint",
+             config.iso_fingerprints[i]);
+  t.insert("schema_version", static_cast<i64>(kInstallSchemaVersion));
+
+  // Atomic replace: write a sibling temp file, then rename over the store.
+  const auto tmp = path.parent_path() / "install.toml.tmp";
+  {
+    std::ofstream out(tmp, std::ios::trunc);
+    if (!out) {
+      BD_ERROR("Install store: cannot write {}", tmp.string());
+      return false;
+    }
+    out << t << '\n';
+    out.flush();
+    if (!out.good()) {
+      BD_ERROR("Install store: write to {} failed", tmp.string());
+      std::filesystem::remove(tmp, ec);
+      return false;
+    }
+  }
+  std::filesystem::rename(tmp, path, ec);
+  if (ec) {
+    BD_ERROR("Install store: rename to {} failed: {}", path.string(),
+             ec.message());
+    std::filesystem::remove(tmp, ec);
+    return false;
+  }
+  return true;
+}
+
+bool ClearInstallRegistry() {
+  const auto path = InstallStorePath();
+  if (path.empty())
+    return true;
+  std::error_code ec;
+  std::filesystem::remove(path, ec);
+  return !std::filesystem::exists(path, ec);
+}
+
+} // namespace bd::installer
 
 #endif

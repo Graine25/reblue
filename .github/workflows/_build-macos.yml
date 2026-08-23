@@ -1,0 +1,108 @@
+name: Build macOS
+
+# Apple Silicon and Intel, each native on its own runner. The zip holds a
+# self-contained, ad-hoc signed reblue.app with the pinned MoltenVK the SDK
+# stages beside the executable. Step bodies live in .github/scripts.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit-ish to build (empty = the caller's ref)"
+        required: false
+        type: string
+        default: ""
+      sdk_tag:
+        description: "rexglue-sdk release tag to build against"
+        required: true
+        type: string
+      asset_base:
+        description: "Asset name stem, from _resolve.yml"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  SDK_REPO: rexglue/rexglue-sdk
+  SDK_TAG: ${{ inputs.sdk_tag }}
+  ASSETS_REPO: zolaware/reblue-assets
+  # Every Mach-O in the bundle must load on this release. Raise it only once
+  # every target Mac is known to be newer.
+  MAX_MACOS: "13.3"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: amd64
+            runner: macos-15-intel
+    name: mac-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      SDK_SLICE: mac-${{ matrix.arch }}
+      PRESET: mac-${{ matrix.arch }}-release
+      COMPILER_LAUNCHER: ccache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      - name: Checkout game assets
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.ASSETS_REPO }}
+          token: ${{ secrets.ASSETS_TOKEN }}
+          path: assets
+          lfs: true
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          key: mac-${{ matrix.arch }}
+
+      # ccache drags in Homebrew's fmt, and on Intel the Homebrew prefix is
+      # /usr/local, which clang reaches before the SDK. The two disagree over
+      # whether detail::allocate exists, and the SDK's libfmt decides the link.
+      - name: Drop the Homebrew fmt headers
+        run: rm -rf /usr/local/include/fmt
+
+      - name: Fetch ReXGlue SDK (${{ inputs.sdk_tag }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/fetch-sdk.sh
+
+      - name: Configure
+        run: bash .github/scripts/configure.sh
+
+      - name: Codegen
+        run: cmake --build --preset "${PRESET}" --target reblue_codegen
+
+      - name: Reconfigure (pick up generated/sources.cmake)
+        run: bash .github/scripts/configure.sh
+
+      - name: Build
+        run: cmake --build --preset "${PRESET}" -j
+
+      - name: Package app bundle
+        env:
+          OUT_FILE: ${{ inputs.asset_base }}-mac-${{ matrix.arch }}.zip
+          SIGN_IDENTITY: "-"
+        run: bash .github/scripts/package-macos-app.sh
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: reblue-mac-${{ matrix.arch }}
+          path: dist/*.zip
+          if-no-files-found: error

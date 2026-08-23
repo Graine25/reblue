@@ -1,42 +1,143 @@
 
-# re:Blue - Blue Dragon Recompiled
 
-> [!WARNING]
-> This is a heavy work in progress. Things will break, things will crash, and large chunks of what you might expect from a "finished" port simply aren't there yet. If you're looking for a polished experience, come back in a while. If you're curious and want to poke at things, you're in the right place.
-
-re:Blue is a static recompilation of Blue Dragon (Xbox 360) built on the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk). The goal is to get the game running natively and build real modding support on top of it.
-
-<img width="1282" height="752" alt="Screenshot 2026-04-18 214413" src="https://github.com/user-attachments/assets/f1e2af70-18e7-4359-8f86-48f67fb3e039" />
-
-## Current state
-
-The game boots, the title screen works, and a fair amount of the engine has been reverse engineered to the point where we can hook into it cleanly. Past that, expect rough edges everywhere. Specific issues come and go as things are investigated, so the short version is that it's playable to poke at, not playable to actually play through. Yet.
-
-## Mod manager
-
-There's an in-game mod manager being built using the game's own UI system (d2anime), so it feels like part of the game rather than a bolted-on overlay. You can browse installed mods, toggle them on and off, and it handles the wiring behind the scenes.
-
-<img width="1282" height="752" alt="Screenshot 2026-04-18 214317" src="https://github.com/user-attachments/assets/238a2ee5-9583-4936-aff2-2414a790a879" />
-<img width="1282" height="752" alt="Screenshot 2026-04-18 214312" src="https://github.com/user-attachments/assets/ffb7c570-2052-40a4-ac1b-8392a39929ac" />
-<img width="1282" height="752" alt="Screenshot 2026-04-18 214303" src="https://github.com/user-attachments/assets/28aabe18-0d7c-4f1b-8b97-5dd2cdef3bda" />
+> [!IMPORTANT]
+> re:Blue is an unofficial project
 
 
-## Mod tools
+# re:Blue
 
-Proper mod authoring tools are in the works. More on that soon. The short version is that the groundwork for virtual file overrides, texture swaps, and CSV/template edits is already in place, and the tooling to make that approachable is coming.
+re:Blue rebuilds Blue Dragon as a native application through static recompilation, translating the original code into something your machine runs directly rather than emulating a console around it. That opens the door to things an emulator cannot reach: higher frame rates, modern resolutions, and real mod support.
 
-## Setup
+## Table of Contents
 
-Coming soon.
+- [How to Install](#how-to-install)
+- [Features](#features)
+- [FAQ](#faq)
+- [Building](#building)
+- [Credits](#credits)
+- [License](#license)
+
+## How to Install
+
+[Download latest release for your platform](https://github.com/zolaware/reblue/releases/latest) or [build yourself](#building)
+
+1. Blue Dragon shipped on three DVDs, and you will need a disc image of each one from your own copy of the game.
+
+2. Run the executable. A setup wizard will guide you through the rest. You will be asked to point it at each of the three disc images in turn, and it will check each one before letting you continue.
+
+3. Pick a graphics quality preset and choose where to install. The wizard copies the game files out of the discs, and you are done. You may also install DLC from this installer or from the main menu under the config menu
+
+The wizard only needs to run once. If something later goes missing from your install, launching with `--repair` reopens it on your existing install and copies back only what it needs.
+
+## Features
+
+Everything below is new to re:Blue. All of it is configurable in game, from the title screen or the camp menu.
+
+### Graphics
+
+- Resolutions up to 4K, windowed or fullscreen, on whichever monitor you pick
+- Aspect ratios 16:9, 4:3, 16:10, 21:9, 32:9, plus auto and stretch
+- Four quality presets, Low through Ultra
+- MSAA up to 8x or SSAA up to 4x
+- Anisotropic filtering
+- Shadow quality and draw distance
+- Depth of field adjustment
+- Unlocked FPS with optional caps and VSync
+
+### Quality of Life
+
+- Unlocked frame rate, with optional caps at 30, 60, 90, or 120
+- Save from the camp menu anywhere instead of only at save points
+- Field of view adjustment, 45 through 120 degrees
+- Skip the in-game tutorial pages
+- Full area map on the world map screen, with zoom, floor switching, and a legend
+- Optional map markers for the hidden items, chests, and barriers a floor still has, plus per-floor counts, carried onto the field compass
+- The field HUD can fade out once you stop pressing anything, or stay off entirely
+- Achievement list viewable in game, with eight new re:Blue achievements alongside the original ones
+- Master volume control
+- Separate center, rear, and subwoofer levels for 5.1/7.1 tuning
+- Fully native keyboard and mouse support with cursor and look modes supported by mouse
+- Every controller button rebindable to a key, with mouse sensitivity and cursor opacity of your own
+- Menus take the mouse directly: hover a row to move the cursor, click to confirm, wheel to scroll
+- Custom input based icons/glyphs for hud elements, following the device you last used or pinned to Xbox, PlayStation, Switch, or Steam Deck
+- UI language and voice language chosen separately
+
+
+### Mods and DLC
+
+- Built-in mod manager
+- Official DLC is supported
+
+### Platforms and Languages
+
+- Windows on DX12 or Vulkan
+- Linux AMD64 and ARM64, including the Steam Deck and other handhelds
+- macOS AMD64 and ARM64
+- Custom menus in English, French, German, Italian, and Spanish
+
+## FAQ
+
+### Where is my save data and configuration stored?
+
+Everything lives under the folder you installed to:
+
+- Saves and settings: `profiles\default\`
+- Your configuration file: `profiles\default\reblue.toml`
+- Game files copied from your discs: `game\`
+- Mods: `mods\`
+
+### I want to update the game. Will I lose my save data?
+
+No. Copy a newer build over your existing installation and your saves, settings, and mods are left alone. You do not need to reinstall or point the wizard at your discs again.
+
+### How do I install mods?
+
+Use the mod manager in the config menu. It accepts a mod folder or a zip file and puts everything in the right place for you
+
+### Can I keep more than one set of saves?
+
+Yes. Each profile is its own folder under `profiles\`, holding that profile's saves, settings, achievements, and DLC toggles. Launch with `--profile <name>` to pick one, and anything but `default` starts out fresh.
+
+## Building
+
+re:Blue builds with CMake and vcpkg against the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk).
+
+```sh
+cmake --preset win-amd64-release       # or linux-amd64-release
+cmake --build --preset win-amd64-release
+```
+
+Presets cover `win-amd64`, `win-vk`, `linux-amd64`, `linux-arm64`, `mac-amd64`, and `mac-arm64`, each in Debug, Release, and RelWithDebInfo. A `win-amd64` preset builds both the DX12 and the Vulkan executable, and a `win-vk` one builds the Vulkan executable alone. As with running the game, building requires the files from your own copy of Blue Dragon.
 
 ## Credits
 
-Huge thanks to everyone who's put time into this. re:Blue wouldn't be where it is without you.
+Huge thanks to everyone who has put time into this. re:Blue would not be where it is without you.
 
-* **[rcold](https://github.com/RC0ld)**, who has done an absurd amount for this project. He tests every build, catches things I miss, and knows Blue Dragon's internals better than anyone I've talked to. A lot of re:Blue looks the way it does because of him, and I can't thank him enough.
-* **InfernoZotza** and **[ZolaKluke](https://github.com/ZolaKluke)** - for testing and being huge supporters during the early development of this project. This project would not be where it is without their contributions.
-* The **[ReXGlue SDK](https://github.com/rexglue/rexglue-sdk)** team, for the toolchain this project is built on.
-* The wider **Xbox 360 emulation scene**. A lot of the hardest problems were solved by them long before this project started.
+### re:Blue Development Team
+
+- **[tom/crack](https://github.com/tomcl7)** project lead and developer
+
+- **[rcold](https://github.com/RC0ld)** developer and has done an absurd amount for this project. A lot of re:Blue looks the way it does because of him.
+
+### Playtesting and Support
+
+- **[infernozotza](https://github.com/Zotza)**
+- **baus.98**
+- **[wolfaeterni](https://github.com/Zolawolf)**
+- **[griever666.](https://github.com/grv666)**
+- **[fungus](https://github.com/fungoid-creature)**
+- **[graine25](https://github.com/Graine25)**
+- **[ZolaKluke](https://github.com/ZolaKluke)**
+- **[zhyxeryz](https://github.com/Zhyxeryz)**
+- **[toby](https://github.com/TbyDtch)**
+
+### Special Thanks
+
+- The **[ReXGlue SDK](https://github.com/rexglue/rexglue-sdk)** team, for the toolchain this project is built on.
+
+- The **[hedge-dev](https://github.com/hedge-dev)** team, for [XenosRecomp](https://github.com/hedge-dev/XenosRecomp) and for blazing the trail for Xbox 360 recompilations with [Unleashed Recompiled](https://github.com/hedge-dev/UnleashedRecomp).
+
+- The wider **Xbox 360 emulation scene**, and the [Xenia](https://github.com/xenia-project/xenia) project in particular. A lot of the hardest problems were solved long before this project started.
 
 ## License
 

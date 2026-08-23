@@ -1,0 +1,22 @@
+/**
+ * @file    platform/platform.h
+ * @copyright Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
+ *            All rights reserved.
+ * @license   BSD 3-Clause License
+ *            See LICENSE file in the project root for full license text.
+ */
+#pragma once
+
+#include "platform/crash_handler.h"
+#include "platform/fatal_dialog.h"
+#include "platform/file_dialog.h"
+#include "platform/host_devices.h"
+#include "platform/host_resources.h"
+#include "platform/key_capture.h"
+#include "platform/keyboard_bridge.h"
+#include "platform/keyboard_input.h"
+#include "platform/mouse_input.h"
+#include "platform/native_window.h"
+#include "platform/os_language.h"
+#include "platform/reboot.h"
+#include "platform/updates.h"

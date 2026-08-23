@@ -1,0 +1,9 @@
+[submodule "thirdparty/plume"]
+	path = thirdparty/plume
+	url = https://github.com/zolaware/plume.git
+[submodule "thirdparty/XenosRecomp"]
+	path = thirdparty/XenosRecomp
+	url = https://github.com/zolaware/reblue-XenosRecomp.git
+[submodule "thirdparty/implot"]
+	path = thirdparty/implot
+	url = https://github.com/epezent/implot.git

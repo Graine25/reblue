@@ -557,6 +557,15 @@ bool SettingItemTemplate::SliderFractionAt(f32 x, double& fraction) {
     return true;
 }
 
+int KeybindItemTemplate::ChipAt(f32 x) {
+  for (size_t k = 0; k < std::size(kKeybindSlots); ++k) {
+    const f32 bx = static_cast<f32>(kKeybindSlots[k].x);
+    if (x >= bx && x <= bx + static_cast<f32>(kKeybindSlots[k].w))
+      return static_cast<int>(k);
+  }
+  return -1;
+}
+
 void KeybindItemTemplate::declareVars(CsvBuilder &b) {
   b.vars(FloatV{"Dim", 255.0}, FloatV{"RowW", double(kKeybindCellW)},
          FloatV{"RowVis", 1.0});

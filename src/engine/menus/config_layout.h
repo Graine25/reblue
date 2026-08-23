@@ -241,6 +241,10 @@ public:
   // boxes only have to hold caps and short fallback names.
   KeybindItemTemplate() : RowTemplate(80, 0, kKeybindCellW, kKeybindRowH) {}
 
+  // Which key box a row-local x hits: 0 primary, 1 alternate, -1 outside
+  // both. Hit testing reads the same constants the boxes are drawn from.
+  static int ChipAt(f32 x);
+
 protected:
   void declareVars(CsvBuilder &b) override;
   AnimeWindow rowWindow() const override;

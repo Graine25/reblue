@@ -380,19 +380,24 @@ void ConfigMenu::HandleKeybinds() {
   constexpr auto page = SettingsPage::Keybinds;
   const int gridSlot = keybind_menu_.CursorIndex();
 
-  // The spacer band is selectable, since the engine bounds the cursor by the
-  // entry count alone, so step the cursor through it in the direction it was
-  // traveling. The pointer stands down: hover parks wherever the mouse is,
-  // and fighting it would oscillate.
+  // The empty cells are selectable, since the engine bounds the cursor by the
+  // entry count alone, so step the cursor over them in the direction it was
+  // traveling, column preserved. Off the grid's edge it backs out the way it
+  // came. The pointer stands down: hover parks wherever the mouse is, and
+  // fighting it would oscillate.
   if (KeybindSlotIsSpacer(gridSlot)) {
     if (!MenuMouse::Get().MouseHasCursor()) {
-      // Out of the band by its own edge, not by the slot the cursor stopped
-      // on, so a stop on either of the two spacer rows leaves the same way.
-      const int column = (gridSlot - kKeybindSpacerSlot) % 2;
-      const int to = last_keybind_slot_ < kKeybindSpacerSlot
-                         ? kKeybindSpacerSlot + kKeybindSpacerCount + column
-                         : kKeybindSpacerSlot - 2 + column;
-      keybind_menu_.SetCursorIndex(to);
+      const int dir = last_keybind_slot_ <= gridSlot ? 2 : -2;
+      int to = gridSlot + dir;
+      while (to >= 0 && to < kKeybindSlotCount && KeybindSlotIsSpacer(to))
+        to += dir;
+      if (to < 0 || to >= kKeybindSlotCount) {
+        to = gridSlot - dir;
+        while (to >= 0 && to < kKeybindSlotCount && KeybindSlotIsSpacer(to))
+          to -= dir;
+      }
+      if (to >= 0 && to < kKeybindSlotCount)
+        keybind_menu_.SetCursorIndex(to);
     }
   } else {
     last_keybind_slot_ = gridSlot;

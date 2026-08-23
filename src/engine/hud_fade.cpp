@@ -17,6 +17,7 @@
 #include "core/memory_helpers.h"
 #include "engine/d2anime/anime_input.h"
 #include "engine/d2anime/anime_vars.h"
+#include "engine/d2anime/d2anime_types.h"
 #include "engine/settings.h"
 
 namespace {
@@ -32,12 +33,14 @@ constexpr bd::engine::Button kWakeButtons[] = {
     bd::engine::Button::Y,  bd::engine::Button::LT, bd::engine::Button::RT,
     bd::engine::Button::LB, bd::engine::Button::RB};
 
-// The compass and the minimap draw only during field gameplay, so between them
-// they say whether the HUD is on screen. A camera cut can drop a frame, so a
-// run of empty steps is what counts as gone.
-constexpr int kOffScreenSteps = 4;
+// The compass, the minimap and the party cards each report themselves while
+// they are up, so between them they say whether the HUD is on screen. A window
+// rather than a count of steps: the compass reports per rendered frame and the
+// cards on the 30Hz logic tick, so above 30fps a count reaches any threshold
+// the cards alone can never clear.
+constexpr double kOffScreenSeconds = 0.25;
 bool g_hudDrawn = false;
-int g_stepsSinceDraw = 0;
+double g_lastDrawnAt = 0.0;
 
 bool g_partyCardsFaded = false;
 
@@ -46,9 +49,11 @@ bool g_partyCardsFaded = false;
 constexpr u32 kSimpleStatus_Mode = 0x800;
 constexpr u32 kSimpleStatus_ModeField = 0;
 constexpr u32 kSimpleStatus_Rows = 0x70;
+constexpr u32 kSimpleStatus_Anime = 0x7FC;
 constexpr u32 kPartyRowStride = 0x160;
 constexpr u32 kPartyRow_VarBag = 0x144;
 constexpr int kPartyRowCount = 5;
+constexpr u32 kAnime_Visible = offsetof(bd::engine::D2AnimeTask_t, visible);
 
 double NowSeconds() {
   static const Clock::time_point kEpoch = Clock::now();
@@ -102,8 +107,8 @@ void HudFade::Poll() {
   // Gated on the draws, not on engine state: EngineMode reads Loading while BD
   // streams, which is the whole time you walk.
   if (std::exchange(g_hudDrawn, false)) {
-    g_stepsSinceDraw = 0;
-  } else if (++g_stepsSinceDraw >= kOffScreenSteps) {
+    g_lastDrawnAt = now;
+  } else if (now - g_lastDrawnAt >= kOffScreenSeconds) {
     idle_ = 0.0;
     alpha_ = 1.0f;
     return;
@@ -143,9 +148,19 @@ void bdMiniMapLayerFadeHook(PPCRegister &r31) { ScaleHudColor(r31); }
 // run last. 'SpAlpha' and 'SpColor' are the battle-only tension bar.
 void bdPartyCardFadeHook(PPCRegister &r29) {
   const u32 task = r29.u32;
+
+  // A town has neither a compass nor a minimap, so the cards are all that can
+  // report the HUD on screen. The visible flag rather than this hook running,
+  // since vf02 keeps updating through a hide.
+  const u32 anime = bd::mem::load<u32>(task + kSimpleStatus_Anime);
+  const bool shown =
+      anime && bd::mem::load<u32>(anime + kAnime_Visible) != 0 &&
+      bd::mem::load<u32>(task + kSimpleStatus_Mode) == kSimpleStatus_ModeField;
+  if (shown)
+    g_hudDrawn = true;
+
   const float a = bd::engine::HudFade::Get().Alpha();
-  const bool fade = a < 1.0f && bd::mem::load<u32>(task + kSimpleStatus_Mode) ==
-                                    kSimpleStatus_ModeField;
+  const bool fade = a < 1.0f && shown;
   if (!fade && !g_partyCardsFaded)
     return;
   g_partyCardsFaded = fade;

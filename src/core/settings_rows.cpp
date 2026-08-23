@@ -734,9 +734,10 @@ constexpr SettingRow kControlsSettings[] = {
 
 // The keybind screen draws this list as a 2-column grid, row-major, so the
 // order interleaves its sections column-wise: even indices walk the Actions
-// column, odd indices the Movement & Camera column, for nine rows. The tail
-// is the Controller Compatibility band, which the layout separates with a
-// spacer row (see config_layout.h), D-pad down the left column.
+// column, odd indices the Movement & Camera column. The tail is the Controller
+// Compatibility band, back and the stick presses down the left column and the
+// D-pad down the right. The grid slots the indices land on, including the
+// cells that carry no bind, are kKeybindSlotBind in config_layout.h.
 constexpr SettingRow kKeybindSettings[] = {
     {.label = "settings.keybind.a.label",
      .binding = {.cvar = "keybind_a"},
@@ -815,29 +816,29 @@ constexpr SettingRow kKeybindSettings[] = {
      .padButton = 12,
      .kind = SettingKind::Keybind,
      .kbGated = true},
-    {.label = "settings.keybind.dpad_up.label",
-     .binding = {.cvar = "keybind_dpad_up"},
-     .kind = SettingKind::Keybind,
-     .kbGated = true},
     {.label = "settings.keybind.back.label",
      .binding = {.cvar = "keybind_back"},
      .padButton = 5,
      .kind = SettingKind::Keybind,
      .kbGated = true},
-    {.label = "settings.keybind.dpad_down.label",
-     .binding = {.cvar = "keybind_dpad_down"},
+    {.label = "settings.keybind.dpad_up.label",
+     .binding = {.cvar = "keybind_dpad_up"},
      .kind = SettingKind::Keybind,
      .kbGated = true},
     {.label = "settings.keybind.left_stick_press.label",
      .binding = {.cvar = "keybind_lstick_press"},
      .kind = SettingKind::Keybind,
      .kbGated = true},
-    {.label = "settings.keybind.dpad_left.label",
-     .binding = {.cvar = "keybind_dpad_left"},
+    {.label = "settings.keybind.dpad_down.label",
+     .binding = {.cvar = "keybind_dpad_down"},
      .kind = SettingKind::Keybind,
      .kbGated = true},
     {.label = "settings.keybind.right_stick_press.label",
      .binding = {.cvar = "keybind_rstick_press"},
+     .kind = SettingKind::Keybind,
+     .kbGated = true},
+    {.label = "settings.keybind.dpad_left.label",
+     .binding = {.cvar = "keybind_dpad_left"},
      .kind = SettingKind::Keybind,
      .kbGated = true},
     {.label = "settings.keybind.dpad_right.label",

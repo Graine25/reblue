@@ -193,10 +193,10 @@ private:
 // The keybind grid is sectioned: nine rows interleave the Actions column with
 // the Movement & Camera column, then two empty rows carry the Controller
 // Compatibility panel's own header, and the compat binds fill the tail. The
-// spacer rows sit mid-grid, so the widget carries four more slots than there
-// are binds and every slot past them maps down by four.
-inline constexpr int kKeybindSpacerSlot = 18;
-inline constexpr int kKeybindSpacerCount = 4;
+// bind a grid slot carries is kKeybindSlotBind, with -1 for a cell that
+// carries no bind: the Movement column ends a row before the Actions column,
+// the spacer band sits mid-grid, and the compat block's left column runs out
+// a row before the D-pad column beside it.
 // 15 rows of 32 from here end at 612, inside the rule that closes the content
 // band at 617, which is the band the game's own config screens draw into.
 inline constexpr int kKeybindGridY = 132;
@@ -210,15 +210,25 @@ inline constexpr int kKeybindColStride = 576;
 inline constexpr int kKeybindRowSoloW = 412;
 inline constexpr int kKeybindRowPairW = 544;
 
-inline constexpr bool KeybindSlotIsSpacer(int slot) {
-  return slot >= kKeybindSpacerSlot &&
-         slot < kKeybindSpacerSlot + kKeybindSpacerCount;
-}
+inline constexpr int kKeybindSlotBind[] = {
+    0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14,
+    15, 16, -1,                                     // top band, 9 rows
+    -1, -1, -1, -1,                                 // spacer band, 2 rows
+    17, 18, 19, 20, 21, 22, -1, 23};                // compat band, 4 rows
+inline constexpr int kKeybindSlotCount =
+    static_cast<int>(std::size(kKeybindSlotBind));
+
 inline constexpr int KeybindSlotToIndex(int slot) {
-  return slot < kKeybindSpacerSlot ? slot : slot - kKeybindSpacerCount;
+  return slot >= 0 && slot < kKeybindSlotCount ? kKeybindSlotBind[slot] : -1;
+}
+inline constexpr bool KeybindSlotIsSpacer(int slot) {
+  return KeybindSlotToIndex(slot) < 0;
 }
 inline constexpr int KeybindIndexToSlot(int index) {
-  return index < kKeybindSpacerSlot ? index : index + kKeybindSpacerCount;
+  for (int slot = 0; slot < kKeybindSlotCount; ++slot)
+    if (kKeybindSlotBind[slot] == index)
+      return slot;
+  return -1;
 }
 
 // Keybind row template (l_modmgr_keybind.csv): a bind label plus two key

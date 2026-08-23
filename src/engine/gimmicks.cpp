@@ -22,7 +22,7 @@ namespace bd::engine {
 namespace {
 
 constexpr u32 kTableMagic = 0x31474442; // 'BDG1'
-constexpr u32 kTableVersion = 1;
+constexpr u32 kTableVersion = 2;
 
 // A search point with this flag carries none, and respawns every map load.
 constexpr u16 kNoFlag = 0xFFFF;
@@ -67,6 +67,9 @@ struct Gimmicks::Table {
   std::vector<MapRec> maps;
   std::vector<PointRec> points;
   std::vector<u16> chestFlags;
+  // A guarded chest shares its flag with the guard, which sets it to 1 on
+  // defeat, so nonzero is not open.
+  std::vector<u8> chestOpen;
   std::vector<BarrierRec> barriers;
   std::vector<PlacementRec> chestsPlaced;
   std::vector<PlacementRec> barriersPlaced;
@@ -122,6 +125,7 @@ std::unique_ptr<Gimmicks::Table> Gimmicks::ParseTable() {
   take(t->maps, head[2]);
   take(t->points, head[3]);
   take(t->chestFlags, head[4]);
+  take(t->chestOpen, head[4]);
   take(barrierFlags, head[5]);
   take(barrierColors, head[5]);
   take(t->chestsPlaced, head[6]);
@@ -249,19 +253,19 @@ Tally Gimmicks::Chests(std::string_view stem) const {
   if (!table_->ok || !vars)
     return out;
 
-  const auto count = [&](u16 flag) {
+  const auto count = [&](u32 slot) {
     ++out.total;
-    if (!vars.Global(flag))
+    if (vars.Global(table_->chestFlags[slot]) < table_->chestOpen[slot])
       ++out.remaining;
   };
   // A chest reachable from several story state variants of one map is listed
   // under each, so the whole-game tally walks the distinct flags instead.
   if (stem == kEverywhere) {
-    for (const u16 flag : table_->chestFlags)
-      count(flag);
+    for (u32 slot = 0; slot < table_->chestFlags.size(); ++slot)
+      count(slot);
   } else if (const MapRec *m = table_->Find(stem)) {
     for (u32 i = 0; i < m->chestCount; ++i)
-      count(table_->chestFlags[table_->chestsPlaced[m->chestFirst + i].slot]);
+      count(table_->chestsPlaced[m->chestFirst + i].slot);
   }
   return out;
 }
@@ -310,11 +314,12 @@ std::vector<Marker> Gimmicks::Markers(std::string_view stem) const {
     out.push_back(mk);
   }
 
-  const auto placed = [&](GimmickKind kind, const PlacementRec &p, u16 flag) {
+  const auto placed = [&](GimmickKind kind, const PlacementRec &p, u16 flag,
+                         u8 taken) {
     Marker mk;
     mk.kind = kind;
     mk.trackable = true;
-    mk.collected = vars.Global(flag) != 0;
+    mk.collected = vars.Global(flag) >= taken;
     mk.x = p.x;
     mk.y = p.y;
     mk.z = p.z;
@@ -322,11 +327,12 @@ std::vector<Marker> Gimmicks::Markers(std::string_view stem) const {
   };
   for (u32 i = 0; i < m->chestCount; ++i) {
     const PlacementRec &p = table_->chestsPlaced[m->chestFirst + i];
-    placed(GimmickKind::Chest, p, table_->chestFlags[p.slot]);
+    placed(GimmickKind::Chest, p, table_->chestFlags[p.slot],
+           table_->chestOpen[p.slot]);
   }
   for (u32 i = 0; i < m->barrierCount; ++i) {
     const PlacementRec &p = table_->barriersPlaced[m->barrierFirst + i];
-    placed(GimmickKind::Barrier, p, table_->barriers[p.slot].flag);
+    placed(GimmickKind::Barrier, p, table_->barriers[p.slot].flag, 1);
   }
   return out;
 }

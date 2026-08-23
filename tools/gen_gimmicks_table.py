@@ -39,7 +39,7 @@ import sys
 import tempfile
 
 MAGIC = 0x31474442  # 'BDG1'
-VERSION = 1
+VERSION = 2
 
 # Gmk::ReactGim's kind, in the order of the engine's own name table.
 POINT_TYPES = ["NONE", "MESS", "ITEM", "GOLD", "HEAL", "DAMG", "STAT", "MEDL",
@@ -165,9 +165,12 @@ def load_points(script_dirs):
             if head is None:
                 continue
             col = {n.strip(): j for j, n in enumerate(rows[head])}
-            # One file spells the column Disable(#) rather than Delete(#).
-            dele = next((c for c in ("Delete(#)", "Disable(#)") if c in col),
+            # Spelled Disable(#) in one file, unnamed in dg05_it05 and
+            # dg05_it06. It always follows Comment.
+            dele = next((col[c] for c in ("Delete(#)", "Disable(#)") if c in col),
                         None)
+            if dele is None and col.get("Comment", len(rows[head])) + 1 < len(rows[head]):
+                dele = col["Comment"] + 1
 
             for row in rows[head + 1:]:
                 if not row or not row[0].strip():
@@ -180,7 +183,7 @@ def load_points(script_dirs):
                 kind = field("Type")
                 if kind not in TYPE_INDEX:
                     continue  # two rows carry a mangled Type and place nothing
-                if dele and field(dele) == "#":
+                if dele is not None and dele < len(row) and row[dele].strip() == "#":
                     continue
 
                 try:
@@ -225,10 +228,12 @@ def load_flaglist(path, want_color):
 
 
 def scan_scripts(bdsl_dir):
-    """flagId -> {map stem: (strength, pos)} over every decompiled scene."""
+    """flagId -> {map stem: (strength, pos, openValue)} over every scene."""
     entry = re.compile(r'^(spawn|link|box|zone|enemy|warp|entity) "(.*)" id=(\d+)',
                        re.M)
-    setvar = re.compile(r"set_variable\(dest_var=0x([0-9A-Fa-f]+),")
+    setvar = re.compile(r"set_variable\(dest_var=0x([0-9A-Fa-f]+),"
+                        r"(?: operator=0x0, source_var=0x0,"
+                        r" value=0x([0-9A-Fa-f]+))?")
     give = re.compile(r"\b(give_item|give_gold|give_medal|give_item_special)\(")
     where = re.compile(r"^\s*position = \(([-\d.E+]+), ([-\d.E+]+), ([-\d.E+]+)\)",
                        re.M)
@@ -256,20 +261,30 @@ def scan_scripts(bdsl_dir):
                 continue
             pos = tuple(float(c) for c in spot.groups())
             strength = 1 if give.search(body) else 0
-            for var in setvar.findall(body):
+            # A guarded chest shares its flag with the guard, which sets it
+            # to 1 on defeat.
+            opened = {}
+            if strength:
+                for var, value in setvar.findall(body):
+                    if not value:
+                        continue
+                    flag = int(var, 16) - 256
+                    if flag >= 0 and int(value, 16):
+                        opened[flag] = max(opened.get(flag, 0), int(value, 16))
+            for var, _ in setvar.findall(body):
                 # Script variable ids below 256 are per-script locals.
                 flag = int(var, 16) - 256
                 if flag < 0:
                     continue
                 prev = scored[flag].get(key)
                 if prev is None or strength >= prev[0]:
-                    scored[flag][key] = (strength, pos)
+                    scored[flag][key] = (strength, pos, opened.get(flag, 0))
 
     return scored
 
 
 def attribute(scored, flags):
-    """flagId -> {map stem: (x, y, z)}.
+    """(flagId -> {map stem: (x, y, z)}, flagId -> open value).
 
     A chest is a link entry whose block gives an item and then sets the flag.
     Blocks that only set it are chapter resets, so one that also gives outranks
@@ -278,22 +293,24 @@ def attribute(scored, flags):
     under each variant is what we want.
     """
     out = {}
+    opened = {}
     for flag in flags:
         cands = scored.get(flag)
         if not cands:
             continue
         best = max(v[0] for v in cands.values())
-        winners = {k: v[1] for k, v in cands.items() if v[0] == best}
-        if len(winners) > 1:
+        won = {k: v for k, v in cands.items() if v[0] == best}
+        if len(won) > 1:
             # The overworld script also carries a debug dump of chest flags.
-            real = {k: v for k, v in winners.items() if k != "wd_world"}
+            real = {k: v for k, v in won.items() if k != "wd_world"}
             if real:
-                winners = real
-        out[flag] = winners
-    return out
+                won = real
+        out[flag] = {k: v[1] for k, v in won.items()}
+        opened[flag] = max(max(v[2] for v in won.values()), 1)
+    return out, opened
 
 
-def pack(points, chests, barriers, chest_maps, barrier_maps):
+def pack(points, chests, barriers, chest_maps, barrier_maps, chest_open):
     strings = bytearray()
     string_off = {}
 
@@ -341,6 +358,9 @@ def pack(points, chests, barriers, chest_maps, barrier_maps):
         body.extend(struct.pack("<HBxfff", flag, kind, x, y, z))
     for f in chest_flags:
         body.extend(struct.pack("<H", f))
+    align4(body)
+    for f in chest_flags:
+        body.append(min(chest_open.get(f, 1), 255))
     align4(body)
     for f in barrier_flags:
         body.extend(struct.pack("<H", f))
@@ -395,11 +415,11 @@ def main():
         barriers = load_flaglist(find_one(root, "flaglist_barrier.csv"), True)
 
         scored = scan_scripts(bdsl)
-        chest_maps = attribute(scored, [f for f, _ in chests])
-        barrier_maps = attribute(scored, [f for f, _ in barriers])
+        chest_maps, chest_open = attribute(scored, [f for f, _ in chests])
+        barrier_maps, _ = attribute(scored, [f for f, _ in barriers])
 
         blob, maps, rows = pack(points, chests, barriers, chest_maps,
-                                barrier_maps)
+                                barrier_maps, chest_open)
         os.makedirs(os.path.dirname(args.out), exist_ok=True)
         with open(args.out, "wb") as f:
             f.write(blob)
@@ -412,8 +432,10 @@ def main():
     print(f"  maps      {len(maps)}")
     print(f"  points    {len(rows)}  trackable {trackable}  "
           f"respawning {len(rows) - trackable}")
+    guarded = sum(1 for v in chest_open.values() if v > 1)
     print(f"  chests    {len(chests)}  placed {len(chest_maps)}  "
-          f"unplaced {len(chests) - len(chest_maps)}")
+          f"unplaced {len(chests) - len(chest_maps)}  "
+          f"opened-at-2-or-more {guarded}")
     print(f"  barriers  {len(barriers)}  placed {len(barrier_maps)}")
 
 

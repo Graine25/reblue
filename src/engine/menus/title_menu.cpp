@@ -106,10 +106,10 @@ u32 s_title_task_addr = 0;
 // nor a popping menu is ever visible.
 enum class ConfigFade { None, TitleOut, Hold, Lift };
 ConfigFade s_config_fade = ConfigFade::None;
-constexpr f32 kFadeOutSeconds = 0.20f;
-constexpr f32 kFadeInSeconds = 0.25f;
+constexpr f32 kFadeOutSeconds = 0.9f;
+constexpr f32 kFadeInSeconds = 0.9f;
 // A zero sweep lands the veil on the frame it is asked for.
-constexpr f32 kInstant = 0.0f;
+constexpr f32 kInstant = 0.05f;
 
 // Registered id of the engine "DebugMenu" sequence, resolved once at the title.
 // It is only registered when devmode was on at boot.
@@ -402,6 +402,7 @@ REX_HOOK_RAW(TitleTask_OnChildComplete) {
 REX_HOOK_RAW(TitleTask_Update) {
   u32 titleTask = ctx.r3.u32;
   auto *task = Task(titleTask);
+  static float s_exit_hold_timer = 0.0f;
 
   // Resolve the built-in "DebugMenu" sequence id once. Only registered when
   // debugMenuBoot was set at boot (devmode), so 0 keeps the row hidden.
@@ -427,25 +428,26 @@ REX_HOOK_RAW(TitleTask_Update) {
 
   // Handle pending close first so a reinstall can register fresh VFS state.
   if (s_config_closing) {
-    s_config_closing = false;
+      s_config_closing = false;
 
-    bool wantsRestart = s_config_menu.WantsRestart();
-    s_config_menu.Destroy();
+      bool wantsRestart = s_config_menu.WantsRestart();
+      s_config_menu.Destroy();
 
-    task->child_task = 0;
-    task->state = kTitleStateMenu;
-    memcpy(task->child_name, "Title\0", 6);
+      task->child_task = 0;
+      task->state = kTitleStateMenu;
+      memcpy(task->child_name, "Title\0", 6);
 
-    bd::engine::UnregisterVFS();
+      bd::engine::UnregisterVFS();
 
-    if (wantsRestart) {
-      // The rebuilt menu comes back up under the veil it went down under.
-      s_create_config = true;
-      s_config_fade = ConfigFade::Hold;
-    } else {
-      fade.FadeTo(0.0f, kFadeInSeconds);
-      s_config_fade = ConfigFade::Lift;
-    }
+      if (wantsRestart) {
+          // The rebuilt menu comes back up under the veil it went down under.
+          s_create_config = true;
+          s_config_fade = ConfigFade::Hold;
+      }
+      else {
+          // INSTEAD of fading immediately, just prime the timer and stay in Hold.
+          s_exit_hold_timer = 0.0f;
+      }
   }
 
   if (s_create_config) {
@@ -482,14 +484,27 @@ REX_HOOK_RAW(TitleTask_Update) {
       s_config_closing = true;
       s_config_fade = ConfigFade::Hold;
     }
-  } else {
-    // Held still under an opaque or landing veil: no input reaches the rows
-    // it covers, and the swap happens between frames the player can see.
-    if (s_config_fade == ConfigFade::TitleOut ||
-        s_config_fade == ConfigFade::Hold)
-      return;
-    NavigateNoSaveMenu(titleTask);
-    HoverTitleRows(titleTask);
-    __imp__TitleTask_Update(ctx, base);
   }
-}
+  else {
+      // Held still under an opaque or landing veil: no input reaches the rows
+      // it covers, and the swap happens between frames the player can see.
+      if (s_config_fade == ConfigFade::TitleOut ||
+          s_config_fade == ConfigFade::Hold) {
+
+          // We are holding black, and the menu is gone (exit delay)
+          if (s_config_fade == ConfigFade::Hold) {
+              s_exit_hold_timer += ImGui::GetIO().DeltaTime;
+              const float kExitHoldSeconds = 0.07f;
+
+              if (s_exit_hold_timer >= kExitHoldSeconds) {
+                  fade.FadeTo(0.0f, kFadeInSeconds); // Now start lifting the veil
+                  s_config_fade = ConfigFade::Lift;
+              }
+          }
+          return;
+      }
+      NavigateNoSaveMenu(titleTask);
+      HoverTitleRows(titleTask);
+      __imp__TitleTask_Update(ctx, base);
+    }
+  }

@@ -12,12 +12,33 @@ re:Blue rebuilds Blue Dragon as a native application through static recompilatio
 
 ## Table of Contents
 
+- [Hardware Requirements](#hardware-requirements)
 - [How to Install](#how-to-install)
 - [Features](#features)
 - [FAQ](#faq)
 - [Building](#building)
 - [Credits](#credits)
 - [License](#license)
+
+## Hardware Requirements
+
+Requires all three retail Blue Dragon discs or their disc images. Steam Deck is supported. 64-bit ARM processors are supported on Linux and macOS. Windows is x86-64 only. 
+
+### Minimum
+
+- OS: Windows 10 version 1909 or later, Ubuntu 24.04 / Fedora 40 / SteamOS 3.6 or later, or macOS 13.3 Ventura or later
+- Processor: Intel Core i5-4460 3.2 GHz 4 Core or AMD Ryzen 3 1200 or Apple M1, or equivalent
+- Memory: 8 GB RAM
+- GPU: Nvidia GTX 1050 Ti or AMD RX 570, or equivalent performance & VRAM. DirectX 12 with Shader Model 6.0, or Vulkan 1.2, or Metal
+- Storage: 15 GB available space
+
+### Recommended
+
+- OS: Windows 11, SteamOS 3.6, or macOS 14 Sonoma or later
+- Processor: AMD Ryzen 5 5600X or Intel Core i5-12400 or Apple M2, or equivalent performance, 6 physical cores minimum
+- Memory: 16 GB RAM
+- GPU: Nvidia RTX 2060 or AMD RX 5700, or equivalent performance & VRAM. 8 GB VRAM for 4K with MSAA
+- Storage: 15 GB available space
 
 ## How to Install
 

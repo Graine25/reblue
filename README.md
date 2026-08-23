@@ -1,3 +1,4 @@
+<img width="853" height="427" alt="image" src="https://github.com/user-attachments/assets/67b696df-bc75-477b-86e4-da1d5e8e0aa4" />
 
 
 > [!IMPORTANT]
@@ -130,6 +131,7 @@ Huge thanks to everyone who has put time into this. re:Blue would not be where i
 - **[ZolaKluke](https://github.com/ZolaKluke)**
 - **[zhyxeryz](https://github.com/Zhyxeryz)**
 - **[toby](https://github.com/TbyDtch)**
+- **[Wes/Azar42](https://github.com/Azar42)**
 
 ### Special Thanks
 

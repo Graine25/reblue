@@ -384,6 +384,7 @@ void ReblueApp::OnCreateDialogs(rex::ui::ImGuiDrawer *drawer) {
   });
 
   watermark_ = std::make_unique<bd::ui::WatermarkOverlay>(drawer);
+  fade_overlay_ = std::make_unique<bd::ui::FadeOverlay>(drawer);
 
   // reblue's own overlay takes F3. The SDK's F4 cvar settings and F7
   // achievements go in retail, where the config menu and the launcher cover

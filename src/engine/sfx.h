@@ -1,5 +1,5 @@
 /**
- * @file    engine/d2anime/anime_mouse.cpp
+ * @file    engine/sfx.h
  * @copyright   Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
  *              All rights reserved.
  * @license     BSD 3-Clause - see LICENSE
@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <rex/hook.h>
 #include <rex/types.h>
 
 REX_IMPORT(__imp__bdPlaySoundEffect, PlaySoundEffect, u32(u32));

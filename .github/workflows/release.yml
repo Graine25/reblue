@@ -82,11 +82,23 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Compose release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: bash .github/scripts/compose-release-notes.sh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -94,7 +106,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: reblue v${{ needs.resolve.outputs.version }}
           prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
-          generate_release_notes: true
+          body_path: notes.md
           files: artifacts/*
           fail_on_unmatched_files: true
         env:

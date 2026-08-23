@@ -116,7 +116,7 @@ Huge thanks to everyone who has put time into this. re:Blue would not be where i
 
 ### re:Blue Development Team
 
-- **[tom/crack](https://github.com/tomcl7)** project lead and developer
+- **[crack](https://github.com/tomcl7)** project lead and developer
 
 - **[rcold](https://github.com/RC0ld)** developer and has done an absurd amount for this project. A lot of re:Blue looks the way it does because of him.
 
@@ -131,7 +131,7 @@ Huge thanks to everyone who has put time into this. re:Blue would not be where i
 - **[ZolaKluke](https://github.com/ZolaKluke)**
 - **[zhyxeryz](https://github.com/Zhyxeryz)**
 - **[toby](https://github.com/TbyDtch)**
-- **[Wes/Azar42](https://github.com/Azar42)**
+- **[Azar42](https://github.com/Azar42)**
 
 ### Special Thanks
 

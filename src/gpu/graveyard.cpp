@@ -61,9 +61,11 @@ void DestroyResourceNow(u32 guest_va, ResourceType type) {
   case ResourceType::RenderTarget:
   case ResourceType::DepthStencil: {
     auto *tex = static_cast<GuestTexture *>(host);
-    Video::NotifyTextureDestroyed(tex);
     const bool is_surface = (type == ResourceType::RenderTarget ||
                              type == ResourceType::DepthStencil);
+    // A pooled surface keeps its framebuffers and bindless slot: the same
+    // pairs re-form on reacquire.
+    Video::NotifyTextureDestroyed(tex, /*retire_bindings=*/!is_surface);
     // RT/DS surfaces are re-created at identical dims every frame, so park
     // them in the pool for reuse (fence-gated). pendingGPURead waits a cycle:
     // the materialize copy recorded moments ago still reads it.
@@ -74,6 +76,7 @@ void DestroyResourceNow(u32 guest_va, ResourceType type) {
       }
       if (SurfacePool::Return(tex))
         break;
+      Video::RetireTextureBindings(tex);
     }
     // Everything else parks its GPU objects until this slot's fence, which
     // also covers the other in-flight slot's earlier submission.
@@ -156,22 +159,20 @@ void DrainPooledSurfaceReturns(VideoState &s, u32 slot) {
     surface->pendingDestroy = false;
     if (SurfacePool::Return(surface))
       continue;
+    Video::RetireTextureBindings(surface);
     ParkTextureGPUObjects(surface);
     HostResourceHeap::Free(surface);
   }
 }
 
-void Video::NotifyTextureDestroyed(GuestTexture *dead) {
-  if (!dead)
-    return;
-  auto &s = state();
-  std::lock_guard lock(s.mutex);
-  // Invalidate only framebuffers naming the dying texture: its own entries (it
-  // is the container, either a depth surface or the color RT of a depth-less
-  // pass) plus entries on other owners keyed by its color texture. The match
-  // must be exact both ways: a stale RTV/DSV would AV OMSetRenderTargets, and a
-  // global clear would free descriptors still referenced by an in-flight slot's
-  // command list.
+// Invalidate only framebuffers naming the dying texture: its own entries (it
+// is the container, either a depth surface or the color RT of a depth-less
+// pass) plus entries on other owners keyed by its color texture. The match
+// must be exact both ways: a stale RTV/DSV would AV OMSetRenderTargets, and a
+// global clear would free descriptors still referenced by an in-flight slot's
+// command list. Parked pool surfaces stay in framebuffer_owners so the walk
+// reaches them.
+void RetireTextureBindingsLocked(VideoState &s, GuestTexture *dead) {
   {
     BD_CPU_ZONE("FbCacheInvalidate");
     const plume::RenderTexture *deadTex = dead->texture;
@@ -190,6 +191,37 @@ void Video::NotifyTextureDestroyed(GuestTexture *dead) {
           ++it;
       }
     }
+  }
+  // Retire the bindless slot. The rewrite to the null sentinel is fence-
+  // deferred (descriptor_graveyard): in-flight draws recorded against this
+  // texture via lazy resolve substitution still index the slot at execution.
+  ReleaseTextureSRVLocked(s, dead);
+  // A volume texture owns a slice-0 2D companion in a second slot.
+  if (dead->companion2D) {
+    ReleaseTextureSRVLocked(s, dead->companion2D.get());
+  }
+  // A cube atlas reflection owns a sliced TextureCube companion in another
+  // slot.
+  if (dead->companionCube) {
+    ReleaseTextureSRVLocked(s, dead->companionCube.get());
+  }
+}
+
+void Video::RetireTextureBindings(GuestTexture *tex) {
+  if (!tex)
+    return;
+  auto &s = state();
+  std::lock_guard lock(s.mutex);
+  RetireTextureBindingsLocked(s, tex);
+}
+
+void Video::NotifyTextureDestroyed(GuestTexture *dead, bool retire_bindings) {
+  if (!dead)
+    return;
+  auto &s = state();
+  std::lock_guard lock(s.mutex);
+  if (retire_bindings) {
+    RetireTextureBindingsLocked(s, dead);
   }
 
   // Deferred resolves out of a dying surface copy now or the content is lost.
@@ -247,19 +279,6 @@ void Video::NotifyTextureDestroyed(GuestTexture *dead) {
   for (auto &slot : s.textures) {
     if (slot == dead)
       slot = nullptr;
-  }
-  // Retire the bindless slot. The rewrite to the null sentinel is fence-
-  // deferred (descriptor_graveyard): in-flight draws recorded against this
-  // texture via lazy resolve substitution still index the slot at execution.
-  ReleaseTextureSRVLocked(s, dead);
-  // A volume texture owns a slice-0 2D companion in a second slot.
-  if (dead->companion2D) {
-    ReleaseTextureSRVLocked(s, dead->companion2D.get());
-  }
-  // A cube atlas reflection owns a sliced TextureCube companion in another
-  // slot.
-  if (dead->companionCube) {
-    ReleaseTextureSRVLocked(s, dead->companionCube.get());
   }
   // Free the LockRect upload scratch, which is zero for never-locked textures.
   if (dead->mappedMemory) {

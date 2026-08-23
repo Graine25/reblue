@@ -25,42 +25,29 @@ struct GuestTexture;
 // still name it, so eviction retires a victim through the texture graveyard.
 class SurfacePool {
 public:
-  // A matching pooled surface, or nullptr on miss. It keeps its plume
-  // RenderTexture + view, and the caller re-inits the X360 header and re-binds
-  // the SRV.
-  static GuestTexture *Acquire(u32 width, u32 height, u32 plume_format,
-                               u32 sample_count, bool is_depth);
+  // A surface ready to hand to the guest: a parked one of identical key,
+  // reset to fresh-alloc state, or a fresh committed alloc on miss. nullptr
+  // only when the host resource heap is exhausted.
+  static GuestTexture *Acquire(u32 width, u32 height, u32 guest_format,
+                               u32 sample_count);
 
   // Offer a released RT/DS surface back. true => parked (caller must NOT free
   // it), false => rejected, caller frees it. Call only after
   // NotifyTextureDestroyed + fence.
   static bool Return(GuestTexture *surface);
 
+  // Once per frame from DrainSlot: ages out idle spares.
+  static void Tick();
+
   // Free every pooled surface (device teardown). Destroys inline with no fence,
   // so the GPU must already be idle.
   static void Clear();
-
-  struct MissInfo {
-    bool ever_parked = false; // this key was pooled before: evicted, not new
-    u32 free_count = 0;
-    u64 evicted_lru = 0;     // freed under byte-budget pressure
-    u64 rejected_percap = 0; // Return refused, bucket already at per-key cap
-    u64 parked_bytes = 0;
-    // This key's own history: misses WITH lru evictions mean it is thrown out
-    // then immediately wanted again, and misses without mean the fence delay.
-    u64 key_hits = 0;
-    u64 key_misses = 0;
-    u64 key_evicted_lru = 0;
-    u64 key_bytes = 0; // per surface
-  };
-  // Why the Acquire above missed. Diagnostic only, and recomputes the key.
-  static MissInfo DescribeMiss(u32 width, u32 height, u32 plume_format,
-                               u32 sample_count, bool is_depth);
 
   struct Stats {
     u64 hits = 0;   // Acquire matches (cumulative)
     u64 misses = 0; // Acquire misses -> fresh alloc (cumulative)
     u64 evicted_lru = 0;
+    u64 trimmed_idle = 0;
     u64 rejected_percap = 0;
     u64 rejected_oversize = 0; // single surface exceeds the byte budget
     u32 free_count = 0;        // surfaces currently parked

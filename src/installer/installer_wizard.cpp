@@ -538,6 +538,16 @@ void InstallerWizard::DrawSelectInputs() {
     if (ImGui::Button(T("installer.button.add_dlc"), ImVec2(120, 0)))
       EnterAddDLC();
     ImGui::SameLine();
+    // Re-adding the Steam shortcut doesn't need a disc re-verify/copy pass,
+    // so it's its own action rather than gated behind the Repair button.
+    // Wider than the other 120px buttons: "Add to Steam" clips otherwise.
+    // Dimmed/disabled unless the checkbox above is checked, so the button
+    // doesn't read as available independently of that intent.
+    ImGui::BeginDisabled(!add_steam_shortcut_);
+    if (ImGui::Button(T("installer.button.add_steam"), ImVec2(160, 0)))
+      AddSteamShortcutOnly();
+    ImGui::EndDisabled();
+    ImGui::SameLine();
     // Existing install: finish and boot without re-selecting discs.
     if (ImGui::Button(T("installer.button.done"), ImVec2(120, 0)))
       Finish(true);
@@ -667,6 +677,12 @@ void InstallerWizard::DrawDone() {
     if (ImGui::Button(T("installer.button.quit"), ImVec2(120, 0)))
       Finish(false);
   }
+}
+
+void InstallerWizard::AddSteamShortcutOnly() {
+  done_success_ = true;
+  done_message_ = AddSteamShortcut();
+  page_ = Page::Done;
 }
 
 void InstallerWizard::EnterAddDLC() {

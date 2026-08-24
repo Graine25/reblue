@@ -59,71 +59,8 @@ constexpr u32 kTChara_Rot =
 static_assert(kTChara_Pos == 0x15D8 && kTChara_Rot == 0x15E4,
               "CharaVO transform offsets");
 
-// ScriptMan area category, named for the stage name prefix each one selects.
-constexpr u32 kAreaGr = 0;
-constexpr u32 kAreaBg = 1;
-constexpr u32 kAreaBi = 2; // ROOM
-constexpr u32 kAreaDg = 3;
-constexpr u32 kAreaWd = 4; // WORLD
-constexpr u32 kAreaWc = 5;
-constexpr u32 kAreaEb = 6;
-constexpr u32 kAreaSp = 7;
-constexpr u32 kAreaBt = 8;
-
 constexpr size_t kStageNameCap = 32;
 constexpr u32 kVec3Stride = 4;
-
-// Mirrors bdStageNameBuild: the stage stem is built from the category and
-// combinedNum (= area*100 + sub). ROOM and WORLD step a letter from the high
-// digits exactly as the engine does.
-void BuildStageName(char *out, size_t cap, u32 cat, u32 num) {
-  if (cap == 0)
-    return;
-  out[0] = '\0';
-  const u32 hi = num / 100u;
-  const u32 lo = num % 100u;
-  switch (cat) {
-  case kAreaGr:
-    std::snprintf(out, cap, "gr%02u_%02u", hi, lo);
-    break;
-  case kAreaBg:
-    std::snprintf(out, cap, "bg%02u_%02u", hi, lo);
-    break;
-  case kAreaDg:
-    std::snprintf(out, cap, "dg%02u_%02u", hi, lo);
-    break;
-  case kAreaWc:
-    std::snprintf(out, cap, "wc%02u_%02u", hi, lo);
-    break;
-  case kAreaEb:
-    std::snprintf(out, cap, "eb%02u_%02u", hi, lo);
-    break;
-  case kAreaSp:
-    std::snprintf(out, cap, "sp%02u_%02u", hi, lo);
-    break;
-  case kAreaBt:
-    std::snprintf(out, cap, "bt%02u_%02u", hi, lo);
-    break;
-  case kAreaBi:
-    // The 'a' at out[4] is stepped by (num % 10000) / 100.
-    std::snprintf(out, cap, "bi%02ua%02u", num / 10000u, lo);
-    if (cap > 4 && out[4])
-      out[4] = static_cast<char>(out[4] + (num % 10000u) / 100u);
-    break;
-  case kAreaWd:
-    // The 'a' at out[3] is stepped by hi, skipping 'l'.
-    std::snprintf(out, cap, "wd_a%02u", lo + 1u);
-    if (cap > 3 && out[3]) {
-      unsigned c = static_cast<unsigned char>(out[3]) + hi;
-      if (c >= 'l')
-        ++c;
-      out[3] = static_cast<char>(c);
-    }
-    break;
-  default:
-    break;
-  }
-}
 
 std::string StageDisplayName(u32 cat, u32 num) {
   if (cat > kMaxCategory)
@@ -174,6 +111,56 @@ u32 PlayerCharaEA() {
 }
 
 } // namespace
+
+void BuildStageName(char *out, size_t cap, u32 cat, u32 num) {
+  if (cap == 0)
+    return;
+  out[0] = '\0';
+  const u32 hi = num / 100u;
+  const u32 lo = num % 100u;
+  const auto area = static_cast<AreaCategory>(cat);
+  switch (area) {
+  case AreaCategory::Gr:
+    std::snprintf(out, cap, "gr%02u_%02u", hi, lo);
+    break;
+  case AreaCategory::Bg:
+    std::snprintf(out, cap, "bg%02u_%02u", hi, lo);
+    break;
+  case AreaCategory::Dg:
+    std::snprintf(out, cap, "dg%02u_%02u", hi, lo);
+    break;
+  case AreaCategory::Wc:
+    std::snprintf(out, cap, "wc%02u_%02u", hi, lo);
+    break;
+  case AreaCategory::Eb:
+    std::snprintf(out, cap, "eb%02u_%02u", hi, lo);
+    break;
+  case AreaCategory::Sp:
+    std::snprintf(out, cap, "sp%02u_%02u", hi, lo);
+    break;
+  case AreaCategory::Bt:
+    std::snprintf(out, cap, "bt%02u_%02u", hi, lo);
+    break;
+  case AreaCategory::Bi:
+    // The 'a' at out[4] is stepped by (num % 10000) / 100.
+    std::snprintf(out, cap, "bi%02ua%02u", num / 10000u, lo);
+    if (cap > 4 && out[4])
+      out[4] = static_cast<char>(out[4] + (num % 10000u) / 100u);
+    break;
+  case AreaCategory::Wd:
+    // The 'a' at out[3] is stepped by hi, skipping 'l'.
+    std::snprintf(out, cap, "wd_a%02u", lo + 1u);
+    if (cap > 3 && out[3]) {
+      unsigned c = static_cast<unsigned char>(out[3]) + hi;
+      if (c >= 'l')
+        ++c;
+      out[3] = static_cast<char>(c);
+    }
+    break;
+  default:
+    break;
+  }
+}
 
 u32 Stage::Category() const {
   return bd::mem::try_field<u32>(ea_, offsetof(ScriptManTask_t, category));

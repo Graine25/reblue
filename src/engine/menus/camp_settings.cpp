@@ -128,9 +128,7 @@ void CampSettings::Tick() {
   D2AnimeTask top(bd::mem::try_load<u32>(camp + kCampTopTask));
   if (!top.IsVisible())
     return;
-  const u64 uid =
-      bd::mem::try_field<u64>(camp, offsetof(bd::TaskBase_t, taskUID));
-  if (camp_task_ == camp && camp_uid_ == uid)
+  if (!camp_.Rebind(camp))
     return;
   open_ = false;
   RegisterVFS(ConfigMenu::Surface::InGame);
@@ -138,16 +136,12 @@ void CampSettings::Tick() {
                &__imp__Camp__Config__MainTask__vf02);
   if (!menu_.IsActive())
     UnregisterVFS();
-  camp_task_ = camp;
-  camp_uid_ = uid;
 }
 
 void CampSettings::Open(u32 taskAddr) {
   if (!menu_.IsActive()) {
-    if (warned_task_ != taskAddr) {
-      warned_task_ = taskAddr;
+    if (warned_.Rebind(taskAddr))
       BD_WARN("[camp-settings] no menu loaded, leaving the stock screen up");
-    }
     return;
   }
   // Up before the stock pages go down, so the swap finishes whole inside one

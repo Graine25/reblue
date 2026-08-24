@@ -26,8 +26,14 @@ D2AnimeMenu::D2AnimeMenu(u32 guestAddr) {
       rex::MappedPtr<AnimeMenu_t>(mem::at<AnimeMenu_t>(guestAddr), guestAddr);
 }
 
+D2AnimeMenu::D2AnimeMenu(u32 guestAddr, const bd::TaskRef &owner)
+    : D2AnimeMenu(guestAddr) {
+  owner_ = owner;
+  owned_ = true;
+}
+
 void D2AnimeMenu::SetActive(bool active) {
-  if (!ptr_)
+  if (!*this)
     return;
   ptr_->activeFlag = active ? 1 : 0;
   ptr_->deselectAll = active ? 0 : 1;
@@ -36,31 +42,31 @@ void D2AnimeMenu::SetActive(bool active) {
 }
 
 void D2AnimeMenu::SetCursorShown(bool shown) {
-  if (!ptr_)
+  if (!*this)
     return;
   ptr_->cursorShown = shown ? 1 : 0;
 }
 
 void D2AnimeMenu::SetVisible(bool visible) {
-  if (!ptr_)
+  if (!*this)
     return;
   MenuSetVisibleAndPlay(ptr_.guest_address(), visible ? 1 : 0);
 }
 
 void D2AnimeMenu::AttachCursor() {
-  if (!ptr_)
+  if (!*this)
     return;
   MenuAttachToParent(ptr_.guest_address());
 }
 
 int D2AnimeMenu::CursorIndex() const {
-  if (!ptr_)
+  if (!*this)
     return 0;
   return static_cast<int>(static_cast<u32>(ptr_->cursorIndex));
 }
 
 void D2AnimeMenu::SetCursorIndex(int index) {
-  if (!ptr_)
+  if (!*this)
     return;
   ptr_->cursorIndex = static_cast<u32>(index);
   ptr_->needsRebuild = 1;
@@ -68,33 +74,33 @@ void D2AnimeMenu::SetCursorIndex(int index) {
 }
 
 bool D2AnimeMenu::PointerRowX(int &index, f32 &x) const {
-  if (!ptr_)
+  if (!*this)
     return false;
   const auto *menu = mem::try_at<const AnimeMenu_t>(ptr_.guest_address());
   return menu && MenuCellPointerX(*menu, index, x);
 }
 
 bool D2AnimeMenu::RowPointerX(int index, f32 &x) const {
-  if (!ptr_)
+  if (!*this)
     return false;
   const auto *menu = mem::try_at<const AnimeMenu_t>(ptr_.guest_address());
   return menu && MenuRowPointerX(*menu, index, x);
 }
 
 u32 D2AnimeMenu::EnableColor() const {
-  if (!ptr_)
+  if (!*this)
     return 0xFFFFFFFF;
   return static_cast<u32>(ptr_->enableColor);
 }
 
 u32 D2AnimeMenu::DisableColor() const {
-  if (!ptr_)
+  if (!*this)
     return 0x7F7F7FFF;
   return static_cast<u32>(ptr_->disableColor);
 }
 
 void D2AnimeMenu::ForEachTemplate(std::function<void(int, u32)> cb) const {
-  if (!ptr_)
+  if (!*this)
     return;
   const u32 count = ptr_->templates.size();
   for (u32 i = 0; i < count; ++i) {
@@ -106,7 +112,7 @@ void D2AnimeMenu::ForEachTemplate(std::function<void(int, u32)> cb) const {
 }
 
 int D2AnimeMenu::ItemDataIndex(int slot) const {
-  if (!ptr_)
+  if (!*this)
     return slot;
   auto *item =
       mem::at<AnimeItemData_t>(ptr_->itemData[static_cast<u32>(slot)]);
@@ -126,7 +132,7 @@ void D2AnimeMenu::ForEachRow(size_t count, const RowFn &fn) const {
 }
 
 void D2AnimeMenu::SetItemEnabled(int index, bool enabled) {
-  if (!ptr_)
+  if (!*this)
     return;
   auto *item =
       mem::at<AnimeItemData_t>(ptr_->itemData[static_cast<u32>(index)]);
@@ -143,22 +149,22 @@ void D2AnimeMenu::SetToggleRow(int slot, u32 varBag, bool enabled, u32 color) {
 }
 
 void D2AnimeMenu::AddEntryData(int index, bool enabled) {
-  if (!ptr_)
+  if (!*this)
     return;
   MenuAddEntryData(ptr_.guest_address(), static_cast<u32>(index),
                    enabled ? 1 : 0);
 }
 
 int D2AnimeMenu::EntryCount() const {
-  return ptr_ ? static_cast<int>(ptr_->entryData.size()) : 0;
+  return *this ? static_cast<int>(ptr_->entryData.size()) : 0;
 }
 
 int D2AnimeMenu::RowCount() const {
-  return ptr_ ? static_cast<int>(static_cast<u32>(ptr_->gridDimX)) : 0;
+  return *this ? static_cast<int>(static_cast<u32>(ptr_->gridDimX)) : 0;
 }
 
 void D2AnimeMenu::GrowGridByOneRow() {
-  if (!ptr_)
+  if (!*this)
     return;
   const int rows = RowCount();
   const float itemH = ptr_->itemH;

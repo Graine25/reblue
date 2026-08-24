@@ -31,14 +31,11 @@ namespace bd::engine {
 namespace {
 
 // WhenReady tasks still waiting on their parse.
-std::vector<u32> g_pendingReveals;
+std::vector<bd::TaskRef> g_pendingReveals;
 
 } // namespace
 
-D2AnimeTask::D2AnimeTask(u32 guestAddr) {
-  ptr_ = rex::MappedPtr<D2AnimeTask_t>(mem::at<D2AnimeTask_t>(guestAddr),
-                                       guestAddr);
-}
+D2AnimeTask::D2AnimeTask(u32 guestAddr) : ref_(guestAddr) {}
 
 D2AnimeTask D2AnimeTask::Load(u32 parentTask, const char *csvPath,
                               Reveal reveal) {
@@ -51,11 +48,12 @@ D2AnimeTask D2AnimeTask::Load(u32 parentTask, const char *csvPath,
   }
 
   D2AnimeTask task(taskAddr);
-  task->loopFlag = 0;
+  if (task)
+    task->loopFlag = 0;
   // Hidden until parsed, so a screen never draws its half-loaded widgets.
   SetVisibleAndPlay_Task(taskAddr, 0);
   if (reveal == Reveal::WhenReady)
-    g_pendingReveals.push_back(taskAddr);
+    g_pendingReveals.emplace_back(taskAddr);
 
   BD_INFO("[d2anime] D2AnimeTask::Load '{}' at 0x{:08X}", csvPath, taskAddr);
   return task;
@@ -63,13 +61,13 @@ D2AnimeTask D2AnimeTask::Load(u32 parentTask, const char *csvPath,
 
 void D2AnimeTask::Tick() {
   for (size_t i = 0; i < g_pendingReveals.size();) {
-    const u32 addr = g_pendingReveals[i];
+    const u32 addr = g_pendingReveals[i].Address();
     const auto drop = [&] {
       g_pendingReveals[i] = g_pendingReveals.back();
       g_pendingReveals.pop_back();
     };
-    // A task whose parent died mid-load goes with it, DEAD-flagged or freed.
-    if (!bd::LiveTask(addr)) {
+    // A task whose parent died mid-load goes with it.
+    if (!addr) {
       drop();
       continue;
     }
@@ -85,92 +83,94 @@ void D2AnimeTask::Tick() {
 }
 
 void D2AnimeTask::SetVisibleAndPlay(bool visible) {
-  if (!ptr_)
+  if (!ref_)
     return;
-  SetVisibleAndPlay_Task(ptr_.guest_address(), visible ? 1 : 0);
+  SetVisibleAndPlay_Task(ref_.Address(), visible ? 1 : 0);
 }
 
-bool D2AnimeTask::IsVisible() const { return ptr_ && ptr_->visible != 0; }
+bool D2AnimeTask::IsVisible() const { return ref_ && (*this)->visible != 0; }
 
 float D2AnimeTask::AnimSpeed() const {
-  return ptr_ ? static_cast<float>(ptr_->animSpeed) : 0.0f;
+  return ref_ ? static_cast<float>((*this)->animSpeed) : 0.0f;
 }
 
 float D2AnimeTask::AnimLength() const {
-  return ptr_ ? static_cast<float>(ptr_->animLength) : 0.0f;
+  return ref_ ? static_cast<float>((*this)->animLength) : 0.0f;
 }
 
 bool D2AnimeTask::IsAnimFinished() const {
-  return ptr_ && static_cast<u32>(ptr_->loadState) == kLoadStateFinished;
+  return ref_ && static_cast<u32>((*this)->loadState) == kLoadStateFinished;
 }
 
 u32 D2AnimeTask::VarBag() const {
-  return ptr_ ? ptr_.guest_address() + offsetof(D2AnimeTask_t, animeData) : 0;
+  return ref_ ? ref_.Address() + offsetof(D2AnimeTask_t, animeData) : 0;
 }
 
 void D2AnimeTask::SetAnimTime(float frame) {
-  if (!ptr_)
+  if (!ref_)
     return;
   AnimeData_SetAnimTime(VarBag(), static_cast<f64>(frame));
 }
 
 void D2AnimeTask::SetAnimSpeed(float speed) {
-  if (!ptr_)
+  if (!ref_)
     return;
-  ptr_->animSpeed = speed;
+  (*this)->animSpeed = speed;
 }
 
 float D2AnimeTask::AnimTime() const {
-  if (!ptr_)
+  if (!ref_)
     return 0.0f;
-  return static_cast<float>(ptr_->animFrame);
+  return static_cast<float>((*this)->animFrame);
 }
 
 void D2AnimeTask::Kill() {
-  if (!ptr_)
+  if (!ref_)
     return;
-  std::erase(g_pendingReveals, ptr_.guest_address());
-  bd::KillTask(ptr_.guest_address());
-  BD_INFO("[d2anime] task 0x{:08X} killed", ptr_.guest_address());
-  ptr_ = rex::MappedPtr<D2AnimeTask_t>();
+  const u32 addr = ref_.Address();
+  std::erase_if(g_pendingReveals,
+                [addr](const bd::TaskRef &r) { return r.Address() == addr; });
+  bd::KillTask(addr);
+  BD_INFO("[d2anime] task 0x{:08X} killed", addr);
+  ref_.Reset();
 }
 
 // Ready is parsed and playing. Finished is parsed with its one-shot timeline
 // spent. A screen preloaded hidden reaches finished on its own, so both count.
 bool D2AnimeTask::IsReady() const {
-  if (!ptr_)
+  if (!ref_)
     return false;
-  const u32 state = static_cast<u32>(ptr_->loadState);
+  const u32 state = static_cast<u32>((*this)->loadState);
   return state == kLoadStateReady || state == kLoadStateFinished;
 }
 
 void D2AnimeTask::SetFloat(const char *name, double value) {
-  if (!ptr_)
+  if (!ref_)
     return;
   VarBagSetFloat(VarBag(), name, value);
 }
 
 void D2AnimeTask::SetString(const char *name, const char *value) {
-  if (!ptr_)
+  if (!ref_)
     return;
   VarBagSetString(VarBag(), name, value);
 }
 
 void D2AnimeTask::SetText(const char *name, std::string_view utf8) {
-  if (!ptr_)
+  if (!ref_)
     return;
   VarBagSetText(VarBag(), name, utf8);
 }
 
 D2AnimeMenu D2AnimeTask::FindMenuByName(const char *name) const {
-  if (!ptr_)
+  if (!ref_)
     return D2AnimeMenu();
   rex::ppc::stack_guard guard;
   u32 nameAddr = rex::ppc::stack_push_string(name);
-  u32 menuAddr = FindChildByName_Task(ptr_.guest_address(), nameAddr);
+  u32 menuAddr = FindChildByName_Task(ref_.Address(), nameAddr);
   if (!menuAddr)
     return D2AnimeMenu();
-  return D2AnimeMenu(menuAddr);
+  return D2AnimeMenu(menuAddr, ref_);
 }
 
 } // namespace bd::engine

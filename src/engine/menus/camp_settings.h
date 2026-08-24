@@ -9,6 +9,7 @@
  */
 #pragma once
 
+#include "core/task_layout.h"
 #include "engine/menus/config_menu.h"
 
 #include <rex/ppc/func.h>
@@ -44,14 +45,12 @@ private:
 
   ConfigMenu menu_;
   bool open_ = false;
-  // One load per camp visit. The latch is the camp task's identity, so a new
-  // camp, even at a reused address, creates fresh over the handles the old
-  // one took down with its task tree.
-  u32 camp_task_ = 0;
-  u64 camp_uid_ = 0;
+  // One load per camp visit, so a new camp creates fresh over the handles the
+  // old one took down with its task tree.
+  bd::TaskRef camp_;
   // Open runs every frame the stock screen is up, so the load failure is
   // reported once per camp task rather than once per frame.
-  u32 warned_task_ = 0;
+  bd::TaskRef warned_;
 };
 
 } // namespace bd::engine

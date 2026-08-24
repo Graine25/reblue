@@ -8,6 +8,7 @@
  */
 #pragma once
 
+#include "core/task_layout.h"
 #include "engine/d2anime/d2anime_types.h"
 
 #include <cstddef>
@@ -21,11 +22,13 @@ class D2AnimeMenu {
 public:
   D2AnimeMenu() = default;
   explicit D2AnimeMenu(u32 guestAddr);
+  // A menu has no identity of its own, so it borrows the task that parsed it.
+  D2AnimeMenu(u32 guestAddr, const bd::TaskRef &owner);
 
   AnimeMenu_t *operator->() { return ptr_.host_address(); }
   const AnimeMenu_t *operator->() const { return ptr_.host_address(); }
   u32 guest_address() const { return ptr_.guest_address(); }
-  explicit operator bool() const { return static_cast<bool>(ptr_); }
+  explicit operator bool() const { return ptr_ && (!owned_ || owner_); }
 
   void SetActive(bool active);
 
@@ -103,6 +106,8 @@ public:
 
 private:
   rex::MappedPtr<AnimeMenu_t> ptr_;
+  bd::TaskRef owner_;
+  bool owned_ = false;
 };
 
 // One menu's cursor, remembered across frames. A list screen rebuilds its

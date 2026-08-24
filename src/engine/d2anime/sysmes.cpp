@@ -98,54 +98,55 @@ bool SysMesConfirm::Create(u32 parentTask, const char *q1, const char *q2,
   reinterpret_cast<SelMesWinConfig_t *>(base + configAddr)->defaultSel =
       static_cast<u32>(defaultSel);
 
-  task_ = CreateSelMes(frame, base, parentTask, configAddr);
+  task_ = bd::TaskRef(CreateSelMes(frame, base, parentTask, configAddr));
 
-  if (!task_) {
-    BD_ERROR("[sysmes] SelMesWinTask_Create returned null");
+  auto *taskBase = task_.At<bd::TaskBase_t>();
+  auto *parentBase = bd::mem::at<bd::TaskBase_t>(parentTask);
+  if (!taskBase || !parentBase) {
+    BD_ERROR("[sysmes] SelMesWinTask_Create gave no usable task");
+    task_.Reset();
     return false;
   }
-
-  auto *taskBase = bd::mem::at<bd::TaskBase_t>(task_);
-  auto *parentBase = bd::mem::at<bd::TaskBase_t>(parentTask);
   taskBase->notifyParent = parentTask;
   taskBase->notifyParentUID = parentBase->taskUID;
 
-  BD_INFO("[sysmes] created SelMesWinTask at 0x{:08X} (parent=0x{:08X})", task_,
-          parentTask);
+  BD_INFO("[sysmes] created SelMesWinTask at 0x{:08X} (parent=0x{:08X})",
+          task_.Address(), parentTask);
   return true;
 }
 
 bool SysMesConfirm::Poll() const {
-  if (!task_)
+  const auto *t = task_.At<const SelMesWinTask_t>();
+  if (!t)
     return true;
-  auto *t = bd::mem::at<SelMesWinTask_t>(task_);
   return t->confirmed != 0 || t->canceled != 0;
 }
 
 bool SysMesConfirm::Confirmed() const {
-  if (!task_)
-    return false;
-  if (bd::mem::at<SelMesWinTask_t>(task_)->confirmed == 0)
+  const auto *t = task_.At<const SelMesWinTask_t>();
+  if (!t || t->confirmed == 0)
     return false;
   return SelectedAnswer() == 0;
 }
 
 int SysMesConfirm::SelectedAnswer() const {
-  if (!task_)
+  const auto *t = task_.At<const SelMesWinTask_t>();
+  if (!t)
     return -1;
-  u32 cmdSel = bd::mem::at<SelMesWinTask_t>(task_)->commandSelect;
-  if (!cmdSel)
+  const u32 cmdSel = t->commandSelect;
+  const auto *sel = bd::mem::try_at<const CommandSelectTask_t>(cmdSel);
+  if (!sel)
     return -1;
-  return static_cast<int>(
-      bd::mem::at<CommandSelectTask_t>(cmdSel)->cursorIndex);
+  return static_cast<int>(sel->cursorIndex);
 }
 
 void SysMesConfirm::Kill() {
-  if (!task_)
+  const u32 addr = task_.Address();
+  if (!addr)
     return;
-  bd::KillTask(task_);
-  BD_INFO("[sysmes] killed SelMesWinTask at 0x{:08X}", task_);
-  task_ = 0;
+  bd::KillTask(addr);
+  BD_INFO("[sysmes] killed SelMesWinTask at 0x{:08X}", addr);
+  task_.Reset();
 }
 
 } // namespace bd::engine

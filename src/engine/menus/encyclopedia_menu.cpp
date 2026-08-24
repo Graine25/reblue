@@ -97,15 +97,11 @@ bd::engine::D2AnimeTask s_row_task;
 TabGate s_row_gate = TabGate::Hidden;
 bool s_row_added = false;
 int s_preload_delay = kPreloadDelayFrames;
-u32 s_enc_task = 0;
-u64 s_enc_uid = 0;
+bd::TaskRef s_enc_task;
 
 bd::engine::D2AnimeTask s_preview_task;
 bool s_preview_visible = false;
-u32 s_item_task = 0;
-u64 s_item_uid = 0;
-
-u64 TaskUID(u32 task) { return bd::mem::at<bd::TaskBase_t>(task)->taskUID; }
+bd::TaskRef s_item_task;
 
 DiaryTask_t *Diary(u32 encTask) { return bd::mem::at<DiaryTask_t>(encTask); }
 
@@ -211,7 +207,7 @@ bool bdEncyclopediaAchievementsDispatchHook(PPCRegister &r3, PPCRegister &r4) {
   // runs Exit(1) before this call returns, which hides the top screen.
   // s_enc_task was refreshed by the update hook earlier in this same vf02 call.
   if (s_enc_task) {
-    s_ach_menu.Create(s_enc_task);
+    s_ach_menu.Create(s_enc_task.Address());
     // Our own transition redraws all six rows itself.
     UpdateRowGate(TabGate::Hidden, 0);
   }
@@ -227,12 +223,8 @@ bool bdEncyclopediaAchievementsUpdateHook(PPCRegister &r31, PPCRegister &r4) {
   const u32 encTask = r31.u32;
 
   // The task is rebuilt per visit and the allocator hands back the same
-  // address, so re-entry is detected by the 64-bit task UID. The pointer alone
-  // lets a freed row task survive into the next visit.
-  const u64 uid = TaskUID(encTask);
-  if (encTask != s_enc_task || uid != s_enc_uid) {
-    s_enc_task = encTask;
-    s_enc_uid = uid;
+  // address, so re-entry is detected by identity.
+  if (s_enc_task.Rebind(encTask)) {
     s_row_added = false;
     // The row died with the old parent, so drop the handle without touching
     // guest memory that is already freed. The viewer's own screens hang off the
@@ -314,10 +306,7 @@ bool bdEncyclopediaAchievementsUpdateHook(PPCRegister &r31, PPCRegister &r4) {
 void bdCampEncyclopediaPreviewHook(PPCRegister &r31) {
   const u32 itemTask = r31.u32;
 
-  const u64 uid = TaskUID(itemTask);
-  if (itemTask != s_item_task || uid != s_item_uid) {
-    s_item_task = itemTask;
-    s_item_uid = uid;
+  if (s_item_task.Rebind(itemTask)) {
     s_preview_task = bd::engine::D2AnimeTask();
     s_preview_visible = false;
     s_preload_delay = kPreloadDelayFrames;

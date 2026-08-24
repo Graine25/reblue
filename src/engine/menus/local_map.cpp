@@ -185,7 +185,7 @@ public:
 
 private:
   struct HiddenAnime {
-    u32 task;
+    bd::TaskRef task;
     u32 visible;
   };
 
@@ -197,13 +197,13 @@ private:
   u32 SelectedFloor() const;
   int SelectedIndex() const;
   void ApplyScreenVars(bool areaMap);
-  void PreparePrompts(u32 screenTask);
+  void LoadPrompts(u32 screenTask);
   void SyncPrompts(bool available);
   bool StepFloor(int delta);
   void Pan();
 
   bool active_ = false;
-  u32 screenTask_ = 0;
+  bd::TaskRef screen_;
   std::string title_;
   std::string counts_;
   std::vector<Marker> markers_;
@@ -221,7 +221,6 @@ private:
   float cubeFlg_[kWmsLayoutCount] = {-1.0f, -1.0f};
 
   D2AnimeTask prompts_;
-  u32 promptOwner_ = 0;
   bool mounted_ = false;
   u32 glyphGen_ = 0;
 };
@@ -293,7 +292,7 @@ void AreaMap::ApplyScreenVars(bool areaMap) {
   const u32 footerName = rex::ppc::stack_push_string("wrmap_ftr");
 
   for (int i = 0; i < kWmsLayoutCount; ++i) {
-    D2AnimeTask layout(mem::try_field<u32>(screenTask_, kWmsLayouts[i]));
+    D2AnimeTask layout(mem::try_field<u32>(screen_.Address(), kWmsLayouts[i]));
     if (!layout)
       continue;
     const u32 bag = layout.VarBag();
@@ -330,27 +329,31 @@ void AreaMap::ApplyScreenVars(bool areaMap) {
 // replays its intro on the way back.
 void AreaMap::HideVanillaAnime() {
   hidden_.clear();
-  const u32 layout = LayoutTask(screenTask_);
+  const u32 screen = screen_.Address();
+  const u32 layout = LayoutTask(screen);
   const u32 vtable = TaskVtable(layout);
   if (!vtable)
     return;
 
-  const u32 fade = mem::try_field<u32>(screenTask_, kWms_Fade);
+  const u32 fade = mem::try_field<u32>(screen, kWms_Fade);
   const u32 keep = prompts_.guest_address();
-  for (u32 child = FirstChild(screenTask_); child; child = NextSibling(child)) {
+  for (u32 child = FirstChild(screen); child; child = NextSibling(child)) {
     if (child == layout || child == fade || child == keep)
       continue;
     if (TaskVtable(child) != vtable)
       continue;
-    hidden_.push_back({child, mem::try_field<u32>(child, kAnime_Visible)});
+    hidden_.push_back(
+        {bd::TaskRef(child), mem::try_field<u32>(child, kAnime_Visible)});
   }
   for (const HiddenAnime &anime : hidden_)
-    mem::try_store<u32>(anime.task + kAnime_Visible, 0);
+    mem::try_store<u32>(anime.task.Address() + kAnime_Visible, 0);
 }
 
 void AreaMap::RestoreVanillaAnime() {
-  for (const HiddenAnime &anime : hidden_)
-    mem::try_store<u32>(anime.task + kAnime_Visible, anime.visible);
+  for (const HiddenAnime &anime : hidden_) {
+    if (anime.task)
+      mem::try_store<u32>(anime.task.Address() + kAnime_Visible, anime.visible);
+  }
   hidden_.clear();
 }
 
@@ -386,10 +389,7 @@ void AreaMap::Leave() {
   ApplyScreenVars(false);
 }
 
-void AreaMap::PreparePrompts(u32 screenTask) {
-  if (promptOwner_ == screenTask)
-    return;
-
+void AreaMap::LoadPrompts(u32 screenTask) {
   // Before the CSV is generated: the prompt labels come from the catalog.
   i18n::SyncLocale();
 
@@ -401,7 +401,6 @@ void AreaMap::PreparePrompts(u32 screenTask) {
   }
 
   prompts_ = D2AnimeTask::Load(screenTask, kLocalMapPromptCSV);
-  promptOwner_ = screenTask;
 }
 
 void AreaMap::SyncPrompts(bool available) {
@@ -470,22 +469,20 @@ void AreaMap::Pan() {
 
 bool AreaMap::Update(u32 screenTask) {
   // A new field scene builds a new screen, and nothing of ours survives it.
-  if (screenTask != screenTask_) {
+  // The heap recycles screen addresses, so the check is on identity.
+  if (screen_.Rebind(screenTask)) {
     active_ = false;
     floors_.clear();
     hidden_.clear();
     markers_.clear();
     legend_.clear();
     prompts_ = D2AnimeTask();
-    promptOwner_ = 0;
     glyphGen_ = 0;
-    screenTask_ = screenTask;
+    // Ahead of the state gate, so the CSV and its textures get the whole open
+    // transition to settle. Loading on the first interactive frame instead
+    // costs the prompt its first moments on screen.
+    LoadPrompts(screenTask);
   }
-
-  // Ahead of the state gate, so the CSV and its textures get the whole open
-  // transition to settle. Loading on the first interactive frame instead costs
-  // the prompt its first moments on screen.
-  PreparePrompts(screenTask);
 
   const u32 state = mem::try_field<u32>(screenTask, kWms_State);
   const bool live = state == kWmsStateReduced || state == kWmsStateEnlarged;
@@ -554,7 +551,7 @@ bool AreaMap::Update(u32 screenTask) {
 }
 
 void AreaMap::Draw(u32 screenTask) {
-  if (!active_ || screenTask != screenTask_)
+  if (!active_ || !screen_.Is(screenTask))
     return;
   const u32 db = SelectedFloor();
   if (!FloorReady(db))

@@ -97,7 +97,6 @@ static_assert(offsetof(VisualRender_t, screen_w) == 0x1A38);
 bd::engine::ConfigMenu s_config_menu;
 bool s_create_config = false;
 bool s_config_closing = false;
-u32 s_title_task_addr = 0;
 
 // Screen-fade sequencing around the config child. Entering, the title fades
 // to black and the config screen cuts in the instant it is up. Leaving, the
@@ -369,7 +368,6 @@ bool bdTitleModsDispatchHook(PPCRegister &r31, PPCRegister &r11) {
     // update hook flips to the child state once the veil lands.
     s_config_fade = ConfigFade::TitleOut;
     bd::ui::ScreenFade::Get().FadeTo(1.0f, kFadeOutSeconds);
-    s_title_task_addr = titleTask;
     return true;
   }
 

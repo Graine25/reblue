@@ -8,6 +8,7 @@
  */
 #pragma once
 
+#include "core/task_layout.h"
 #include "engine/d2anime/d2anime_menu.h"
 #include "engine/d2anime/d2anime_types.h"
 
@@ -34,10 +35,12 @@ public:
   // Reveals every WhenReady task whose parse has finished. Once per guest tick.
   static void Tick();
 
-  D2AnimeTask_t *operator->() { return ptr_.host_address(); }
-  const D2AnimeTask_t *operator->() const { return ptr_.host_address(); }
-  u32 guest_address() const { return ptr_.guest_address(); }
-  explicit operator bool() const { return static_cast<bool>(ptr_); }
+  D2AnimeTask_t *operator->() { return ref_.At<D2AnimeTask_t>(); }
+  const D2AnimeTask_t *operator->() const {
+    return ref_.At<const D2AnimeTask_t>();
+  }
+  u32 guest_address() const { return ref_.Address(); }
+  explicit operator bool() const { return static_cast<bool>(ref_); }
 
   void SetVisibleAndPlay(bool visible);
   bool IsVisible() const;
@@ -75,7 +78,7 @@ public:
   void SetText(const char *name, std::string_view utf8);
 
 private:
-  rex::MappedPtr<D2AnimeTask_t> ptr_;
+  bd::TaskRef ref_;
 };
 
 } // namespace bd::engine

@@ -534,6 +534,7 @@ ReblueApp::OnFinalizePaths(const rex::PathConfig &defaults,
   bool repair_requested = false;
 #ifdef REBLUE_BUILD_INSTALLER
   repair_requested = REXCVAR_GET(repair);
+  REXCVAR_SET(repair, false);
 #endif
 
   std::optional<bd::installer::InstallConfig> existing_install;

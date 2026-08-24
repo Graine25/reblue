@@ -4,7 +4,7 @@
 # SDK boilerplate lives in generated/rexglue.cmake.
 
 cmake_minimum_required(VERSION 3.25)
-project(reblue VERSION 0.76.75 LANGUAGES C CXX)
+project(reblue VERSION 0.76.76 LANGUAGES C CXX)
 
 include(CMakeDependentOption)
 

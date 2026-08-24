@@ -61,11 +61,18 @@ struct MiniMapTask_t {
   /* 0x824 */ u8 _pad824[0x83C - 0x824];
   /* 0x83C */ mem::GuestVec<u32> floors; // the MM_dgXX_YY_NN sub-floors
   /* 0x848 */ be_u32 floor; // null until an area map loads
+  /* 0x84C */ u8 _pad84C[0x850 - 0x84C];
+  /* 0x850 */ be_u32 category; // identity triple: a repeat call with the same
+  /* 0x854 */ be_u32 areaHi;   // values returns early instead of reloading
+  /* 0x858 */ be_u32 areaLo;
 };
 static_assert(offsetof(MiniMapTask_t, chromeTex) == 0x06C);
 static_assert(offsetof(MiniMapTask_t, baseFloor) == 0x08C);
 static_assert(offsetof(MiniMapTask_t, floors) == 0x83C);
 static_assert(offsetof(MiniMapTask_t, floor) == 0x848);
+static_assert(offsetof(MiniMapTask_t, category) == 0x850);
+static_assert(offsetof(MiniMapTask_t, areaHi) == 0x854);
+static_assert(offsetof(MiniMapTask_t, areaLo) == 0x858);
 
 // Slots of the chrome texture holder as MiniMapTask__DrawWidget binds them: 1
 // ring, 2 player arrow, 3 destination marker.

@@ -1115,6 +1115,7 @@
 0x82398E90 = { name = "bdMapPathBuild", size = 0x1F4 }
 0x8239AFF8 = { name = "MiniMapTask__DrawWidget" }
 0x8239BA30 = { name = "bdMinimapLoad", size = 0x1AC }
+0x8239C260 = { name = "MiniMapTask_LoadAreaFloors" }
 0x8239CD50 = { name = "bdWorldMapScreenTaskConstruct" }
 0x8239D3A0 = { name = "WorldMapScreenTask__vf02_Update", size = 0x29C }
 0x8239D640 = { name = "WorldMapScreenTask__vf03", size = 0xEC }

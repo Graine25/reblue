@@ -107,6 +107,7 @@ private:
 
   WizardChoices choices_;
   bool update_check_ = false; // checkbox state, seeded from the live setting
+  bool add_steam_shortcut_ = false;
 
   InstallProgress progress_;
   std::thread install_thread_;

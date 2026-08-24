@@ -145,6 +145,9 @@ foreach(target IN LISTS REBLUE_TARGETS)
         target_link_libraries(${target} PRIVATE CURL::libcurl)
         target_compile_definitions(${target} PRIVATE REBLUE_HAVE_CURL)
     endif()
+    if(REBLUE_BUILD_INSTALLER)
+        target_link_libraries(${target} PRIVATE vdflib::vdflib)
+    endif()
 
     if(REBLUE_PCH)
         target_precompile_headers(${target} PRIVATE ${pch_headers})
@@ -216,14 +219,17 @@ endforeach()
 
 # The SDK stages its shared runtime libs next to the exe on Windows only, and
 # nothing populates the $ORIGIN rpath it sets on UNIX, so librexruntime and
-# libTracyClient link but fail to load. These two are the only SHARED IMPORTED
-# targets reblue links.
+# libTracyClient link but fail to load. These two are SHARED IMPORTED targets;
+# vdflib is an in-tree shared target but lands in its own build subdirectory,
+# so it needs the same treatment when the installer (and vdflib with it) is
+# built in.
 if(UNIX)
     foreach(target IN LISTS REBLUE_TARGETS)
         add_custom_command(TARGET ${target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 $<TARGET_FILE:rex::runtime>
                 "$<${REBLUE_PROFILING_ON}:$<TARGET_FILE:rex::TracyClient>>"
+                "$<$<BOOL:${REBLUE_BUILD_INSTALLER}>:$<TARGET_FILE:vdflib::vdflib>>"
                 $<TARGET_FILE_DIR:${target}>
             COMMAND_EXPAND_LISTS
             VERBATIM)

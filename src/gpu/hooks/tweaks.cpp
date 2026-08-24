@@ -65,10 +65,12 @@ void bdSceneResolutionScaleHook(PPCRegister &r3, PPCRegister &r4) {
 // canvas, and recreates the sampleable resolve texture only when the game-set
 // scale changes, so scaling the stored dims alone leaves the resolve writing
 // a stock-sized texture forever. Scale the width by the render rect times
-// supersampling, capped just under FullscreenChainClassLocked's width gate so
-// it can never take fullscreen_chain_head, and break the scale latch whenever
-// the forced width changes so the guest recreates the texture. The height and
-// the create both derive from the stored width downstream of the hook site.
+// supersampling, bounded by bd_reflection_upscale so the game's own distance
+// LOD keeps picking the size instead of every plane landing on the cap, and
+// capped just under FullscreenChainClassLocked's width gate so it can never
+// take fullscreen_chain_head. Break the scale latch whenever the forced width
+// changes so the guest recreates the texture. The height and the create both
+// derive from the stored width downstream of the hook site.
 void bdReflectionResolutionScaleHook(PPCRegister &r31) {
   u32 render_w = 0;
   u32 render_h = 0;
@@ -80,8 +82,9 @@ void bdReflectionResolutionScaleHook(PPCRegister &r31) {
 
   const u32 ss =
       static_cast<u32>(std::max(bd::gpu::Video::BootSupersampling(), 1));
-  const double sx =
-      render_w * ss / static_cast<double>(bd::gpu::kDesignCanvasWidth);
+  const double sx = std::min(
+      render_w * ss / static_cast<double>(bd::gpu::kDesignCanvasWidth),
+      bd::gpu::Settings::Get().ReflectionUpscale());
   const double cap = std::min(render_w, 1280u) - 8.0;
   const u32 stock = static_cast<u32>(info->width);
   const u32 width = static_cast<u32>(std::min(stock * sx, cap) + 0.5);

@@ -24,6 +24,7 @@ REXCVAR_DECLARE(i32, bd_supersampling);
 REXCVAR_DECLARE(i32, bd_msaa);
 REXCVAR_DECLARE(bool, bd_ntsc_filter);
 REXCVAR_DECLARE(double, bd_dof_strength);
+REXCVAR_DECLARE(double, bd_reflection_upscale);
 REXCVAR_DECLARE(i32, bd_shadow_dimension);
 REXCVAR_DECLARE(double, bd_shadow_distance);
 REXCVAR_DECLARE(i32, bd_aspect_ratio);
@@ -85,6 +86,20 @@ REXCVAR_DEFINE_DOUBLE(bd_dof_strength, 1.0, kCvarGroup,
                       "Depth-of-field intensity, 1.0 = the game's own blur, "
                       "0 = off.")
     .range(0.0, 1.0)
+    .validator([](std::string_view v) {
+      f64 d = 0;
+      return rex::cvar::ParseDouble(v, d) && std::isfinite(d);
+    });
+
+// A ceiling rather than a factor, so the size the game asks for still carries.
+// Water sits in a fraction of the frame and its reflection re-renders the
+// scene, so the fill this buys back is worth more than the sharpness it costs.
+REXCVAR_DEFINE_DOUBLE(bd_reflection_upscale, 2.0, kCvarGroup,
+                      "Ceiling on how far the planar water reflection is "
+                      "scaled above BD's own 320-wide base. 1.0 = the size "
+                      "the game asks for, higher trades fill rate for a "
+                      "sharper reflection.")
+    .range(1.0, 8.0)
     .validator([](std::string_view v) {
       f64 d = 0;
       return rex::cvar::ParseDouble(v, d) && std::isfinite(d);
@@ -207,6 +222,9 @@ void Settings::AdoptDOFStrength() {
 }
 void Settings::AdoptShadowDistance() {
   shadowDistance_ = REXCVAR_GET(bd_shadow_distance);
+}
+void Settings::AdoptReflectionUpscale() {
+  reflectionUpscale_ = REXCVAR_GET(bd_reflection_upscale);
 }
 void Settings::AdoptVsync() { vsync_ = REXCVAR_GET(bd_vsync); }
 void Settings::AdoptDiagVerbosity() {
@@ -370,6 +388,7 @@ void Settings::AdoptCvars() {
   AdoptNTSCFilter();
   AdoptDOFStrength();
   AdoptShadowDistance();
+  AdoptReflectionUpscale();
   AdoptVsync();
   AdoptDiagVerbosity();
   AdoptAspectRatio();
@@ -396,6 +415,7 @@ void Settings::Init() {
   reg("bd_ntsc_filter", &Settings::AdoptNTSCFilter);
   reg("bd_dof_strength", &Settings::AdoptDOFStrength);
   reg("bd_shadow_distance", &Settings::AdoptShadowDistance);
+  reg("bd_reflection_upscale", &Settings::AdoptReflectionUpscale);
   reg("bd_vsync", &Settings::AdoptVsync);
   reg("bd_diag_verbosity", &Settings::AdoptDiagVerbosity);
   reg("bd_aspect_ratio", &Settings::AdoptAspectRatio);

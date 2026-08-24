@@ -93,6 +93,11 @@ public:
   f64 ShadowDistance() const { return shadowDistance_; }
   bool SetShadowDistance(f64 v);
 
+  // How far above the size BD asks for the planar reflection may be scaled.
+  // The game's own distance LOD still picks that size. This only bounds how
+  // far the render rect and supersampling are allowed to lift it.
+  f64 ReflectionUpscale() const { return reflectionUpscale_; }
+
   // Coverage and map dimension are one setting between them: coverage is live
   // and the dimension restart-bound, but a step that moved only one would
   // leave texel density wrong for as long as the coverage change is visible.
@@ -162,6 +167,7 @@ private:
   void AdoptNTSCFilter();
   void AdoptDOFStrength();
   void AdoptShadowDistance();
+  void AdoptReflectionUpscale();
   void AdoptVsync();
   void AdoptDiagVerbosity();
   void AdoptAspectRatio();
@@ -183,6 +189,7 @@ private:
   f64 dofStrength_ = 1.0;
   i32 shadowDimension_ = 4096;
   f64 shadowDistance_ = 2.0;
+  f64 reflectionUpscale_ = 2.0;
   i32 aspectRatio_ = 0;
   i32 fovOffset_ = 0;
   bool vsync_ = true;

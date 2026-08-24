@@ -144,16 +144,18 @@ Huge thanks to everyone who has put time into this. re:Blue would not be where i
 
 ### Playtesting and Support
 
-- **[infernozotza](https://github.com/Zotza)**
-- **baus.98**
-- **[wolfaeterni](https://github.com/Zolawolf)**
-- **[griever666.](https://github.com/grv666)**
-- **[fungus](https://github.com/fungoid-creature)**
-- **[graine25](https://github.com/Graine25)**
-- **[ZolaKluke](https://github.com/ZolaKluke)**
-- **[zhyxeryz](https://github.com/Zhyxeryz)**
-- **[toby](https://github.com/TbyDtch)**
-- **[Azar42](https://github.com/Azar42)**
+- **[infernozotza](https://github.com/Zotza)** - Playtester
+- **baus.98** - Playtester
+- **[wolfaeterni](https://github.com/Zolawolf)** - Playtester and French Translations 
+- **[griever666.](https://github.com/grv666)** - Playtester
+- **[fungus](https://github.com/fungoid-creature)** - Playtester
+- **[graine25](https://github.com/Graine25)** - macOS and Linux Development Support
+- **[ZolaKluke](https://github.com/ZolaKluke)** - Playtester
+- **[zhyxeryz](https://github.com/Zhyxeryz)** - Playtester and German Translations
+- **[toby](https://github.com/TbyDtch)** - Graphic Design
+- **[Azar42](https://github.com/Azar42)** - Playtesting
+- **[mrcmunir](https://github.com/mrcmunir)** - Spanish Translations
+- **[emersed](https://github.com/RaphyEmersed)** - Playtester
 
 ### Special Thanks
 

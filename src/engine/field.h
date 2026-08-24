@@ -20,6 +20,23 @@ namespace bd::engine {
 // middle slot.
 using Vec3 = std::array<f32, 3>;
 
+// ScriptMan area category, named for the stage-name prefix each one selects.
+enum class AreaCategory : u32 {
+  Gr = 0,
+  Bg = 1,
+  Bi = 2,
+  Dg = 3,
+  Wd = 4,
+  Wc = 5,
+  Eb = 6,
+  Sp = 7,
+  Bt = 8,
+};
+
+// Mirrors bdStageNameBuild: the stem from a category and combinedNum
+// (= area*100 + sub), empty for a category with no stem.
+void BuildStageName(char *out, size_t cap, u32 cat, u32 num);
+
 // The script variable block. bdSaveBlockCapture copies its first 20480 bytes
 // straight into the save block, so reading it live is reading save state. Two
 // flag namespaces share it: 32-bit globals, and a two-bit array above them.

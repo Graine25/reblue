@@ -142,13 +142,16 @@ void bdProjectionAspectHook(PPCRegister &fov_half, PPCRegister &aspect) {
 // stay authored. Dims above the canvas are already output-space and pass
 // through, which also keeps a re-fed scaled size from compounding. Uniform,
 // height-based since bd_aspect_ratio widens only the width.
+// Divided by the supersampling factor, since Visual__UnitNormal__vf03 sizes
+// the scene surfaces from this view texture and multiplies by it again.
 void bdOutputResViewScaleHook(PPCRegister &f1, PPCRegister &f2) {
   u32 w, h;
   if (!Output::LatchedFit(w, h))
     return;
   if (f1.f64 > kDesignCanvasWidth || f2.f64 > kDesignCanvasHeight)
     return;
-  const double s = h / static_cast<double>(kDesignCanvasHeight);
+  const double ss = std::max(bd::gpu::Video::BootSupersampling(), 1);
+  const double s = h / static_cast<double>(kDesignCanvasHeight) / ss;
   if (s > 1.0) {
     f1.f64 *= s;
     f2.f64 *= s;

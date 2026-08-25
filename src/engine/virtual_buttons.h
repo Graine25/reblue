@@ -22,6 +22,16 @@ void SetMenuOwnsInput(bool owns);
 // mouse onto whatever guest list happens to be behind the window.
 bool HostOverlayOwnsPointer();
 
+// Held for as long as a dialog needs the system pointer. An overlay that only
+// draws must not take one, or the game cursor never comes back.
+class HostPointerClaim {
+public:
+  HostPointerClaim();
+  ~HostPointerClaim();
+  HostPointerClaim(const HostPointerClaim &) = delete;
+  HostPointerClaim &operator=(const HostPointerClaim &) = delete;
+};
+
 // Records that the guest pad reported a press this frame, and reads that back
 // draining. True for a key the MnK driver turned into pad state too, so a
 // caller telling the devices apart has to test the keyboard first.

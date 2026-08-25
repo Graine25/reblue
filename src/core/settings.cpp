@@ -4,6 +4,8 @@
  */
 #include "core/settings.h"
 
+#include "core/build_info.h"
+
 #include <charconv>
 #include <system_error>
 
@@ -61,15 +63,13 @@ REXCVAR_DEFINE_INT32(bd_shutdown_timeout_ms, 1500, kCvarGroup,
                      "drain) before the process is killed outright.")
     .range(100, 30000);
 
-REXCVAR_DEFINE_BOOL(bd_update_check, false, kCvarGroup,
-                    "Ask bd_update_url at startup whether a newer re:Blue "
-                    "release exists, and log the answer.");
+REXCVAR_DEFINE_BOOL(bd_update_check, true, kCvarGroup,
+                    "Read bd_update_url at startup: offer a newer re:Blue "
+                    "release, and fetch the content packs it points at.");
 
-REXCVAR_DEFINE_STRING(bd_update_url,
-                      "https://github.com/zolaware/reblue/releases/latest",
-                      kCvarGroup,
-                      "Release the startup check compares against. Any URL "
-                      "that redirects to a /releases/tag/<tag> page works.");
+REXCVAR_DEFINE_STRING(bd_update_url, REBLUE_UPDATE_URL, kCvarGroup,
+                      "Manifest the startup check reads for the current app "
+                      "version. Empty disables the check.");
 
 // Saves live beside the game, NOT under user_data_root: that root is handed to
 // the XAM content manager, so nesting saves inside it makes the two contend

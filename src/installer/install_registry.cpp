@@ -9,8 +9,30 @@
 
 #include <rex/types.h>
 
+#include "core/build_info.h"
 #include "core/encoding.h"
 #include "core/logging.h"
+
+namespace bd::installer {
+namespace {
+
+// Every field added since schema 1 has a usable default, so an older record
+// comes forward as it stands. A newer one cannot: this build has no idea what
+// it left out, and leaving schema_version as written is what tells the caller.
+void Migrate(InstallConfig &cfg) {
+  const int stored = cfg.schema_version;
+  if (stored > kInstallSchemaVersion) {
+    BD_WARN("Install record schema {} was written by a newer build", stored);
+    return;
+  }
+  cfg.schema_version = kInstallSchemaVersion;
+  if (stored != kInstallSchemaVersion)
+    BD_INFO("Install record migrated from schema {} to {}", stored,
+            kInstallSchemaVersion);
+}
+
+} // namespace
+} // namespace bd::installer
 
 #if defined(_WIN32)
 #include "core/windows_lean.h"
@@ -84,6 +106,14 @@ std::optional<InstallConfig> ReadInstallRegistry() {
     }
   }
 
+  if (auto r = ReadString(key, L"Renderer");
+      r && bd::WideToUtf8(*r) == kRendererVulkan)
+    cfg.renderer = kRendererVulkan;
+
+  if (auto v = ReadString(key, L"AppVersion"))
+    cfg.app_version = bd::WideToUtf8(*v);
+  Migrate(cfg);
+
   const auto default_xex = cfg.game_data_path() / "default.xex";
   if (!std::filesystem::exists(default_xex)) {
     BD_WARN("Install registry present but {} missing - treating as uninstalled",
@@ -118,8 +148,11 @@ bool WriteInstallRegistry(const InstallConfig &config) {
       ok &= WriteString(
           key, (L"Disc" + std::to_wstring(i + 1) + L"Fingerprint").c_str(),
           bd::Utf8ToWide(config.iso_fingerprints[i]));
+    ok &= WriteString(key, L"Renderer", bd::Utf8ToWide(config.renderer));
     ok &= WriteString(key, L"SchemaVersion",
                       std::to_wstring(kInstallSchemaVersion));
+    ok &= WriteString(key, L"AppVersion",
+                      bd::Utf8ToWide(REBLUE_VERSION_STRING));
     if (ok)
       return true;
     BD_ERROR("Failed to write one or more values to install registry");
@@ -178,12 +211,16 @@ std::optional<InstallConfig> ReadInstallRegistry() {
           t["disc" + std::to_string(i + 1) + "_fingerprint"].value_or(
               std::string{});
     cfg.schema_version = t["schema_version"].value_or(0);
+    if (t["renderer"].value_or(std::string(kRendererDX12)) == kRendererVulkan)
+      cfg.renderer = kRendererVulkan;
+    cfg.app_version = t["app_version"].value_or(std::string{});
   } catch (const toml::parse_error &e) {
     BD_WARN("Install store {} unreadable: {}", path.string(), e.what());
     return std::nullopt;
   }
   if (cfg.install_root.empty())
     return std::nullopt;
+  Migrate(cfg);
 
   const auto default_xex = cfg.game_data_path() / "default.xex";
   if (!std::filesystem::exists(default_xex, ec)) {
@@ -213,7 +250,9 @@ bool WriteInstallRegistry(const InstallConfig &config) {
   for (int i = 0; i < kDiscCount; ++i)
     t.insert("disc" + std::to_string(i + 1) + "_fingerprint",
              config.iso_fingerprints[i]);
+  t.insert("renderer", config.renderer);
   t.insert("schema_version", static_cast<i64>(kInstallSchemaVersion));
+  t.insert("app_version", std::string(REBLUE_VERSION_STRING));
 
   // Atomic replace: write a sibling temp file, then rename over the store.
   const auto tmp = path.parent_path() / "install.toml.tmp";

@@ -34,15 +34,19 @@ namespace bd::installer {
 
 void InitInstallerFonts(ImFontAtlas *atlas);
 
-// Only a touched row is persisted into the profile config.
+// Only a touched row is persisted into the profile config. create_shortcut
+// and reset_config are plain bools rather than optional: unlike the two
+// above, an untouched checkbox means "do nothing," not "leave it alone."
 struct WizardChoices {
   int quality_preset = -1; // core/settings preset index
   std::optional<bool> update_check;
+  bool create_shortcut = false;
+  bool reset_config = false;
 };
 
-// ImGuiDialog's destructor is NOT virtual and Close() does 'delete this'. Never
-// call Close(). Own via unique_ptr<InstallerWizard> (derived type) so
-// non-trivial members destruct correctly.
+// ImGuiDialog::Close() does 'delete this' and its destructor is not virtual.
+// Never call Close(), and own via unique_ptr<InstallerWizard> (the derived
+// type) so the members destruct.
 class InstallerWizard : public rex::ui::ImGuiDialog {
 public:
   // completed=true: install finished, cfg valid. completed=false: cancel/error.
@@ -64,12 +68,14 @@ protected:
   void OnDraw(ImGuiIO &io) override;
 
 private:
-  enum class Page { SelectInputs, Installing, Done, AddDLC };
+  enum class Page { SelectInputs, Installing, RebuildingIndex, Done, AddDLC };
 
   void DrawSelectInputs();
   void DrawQualityPreset();
-  void DrawUpdateCheck();
+  void DrawDLCSection();
+  void DrawOptions();
   void DrawInstalling();
+  void DrawRebuildingIndex();
   void DrawDone();
   void DrawAddDLC();
 
@@ -78,8 +84,10 @@ private:
   void ValidateISO(int index);
   bool InputsReady() const;
   void StartInstall();
+  void StartIndexRebuild();
   void Finish(bool completed);
 
+  void InitDLCCatalog();
   void EnterAddDLC();
   void PickAndInstallDLC();
 
@@ -106,12 +114,18 @@ private:
   std::string install_status_;
 
   WizardChoices choices_;
-  bool update_check_ = false; // checkbox state, seeded from the live setting
+  // Checkbox state, seeded from the live settings.
+  bool update_check_ = false;
+  bool create_shortcut_ = false;
+  bool reset_config_ = false;
 
   InstallProgress progress_;
   std::thread install_thread_;
   std::string done_message_;
   bool done_success_ = false;
+
+  std::atomic<bool> index_rebuild_done_{false};
+  std::thread index_rebuild_thread_;
 
   Page dlc_return_page_ = Page::SelectInputs;
   // Derived once on entry: DrawAddDLC runs every frame and absolute() is a

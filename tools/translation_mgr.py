@@ -64,7 +64,8 @@ FIELD = re.compile(r'\.(?:label|desc|key)\s*=\s*"([a-z0-9_.]+\.[a-z0-9_.]+)"')
 # Keys that reach a lookup indirectly: positional initializers
 # (ConfigLayout::kSectionKeys, kPages) and the arms of a ternary.
 BARE = re.compile(
-    r'"((?:settings|menu|opt|footer|title|common|locale|installer|map)'
+    r'"((?:settings|menu|opt|footer|title|common|locale|installer|map'
+    r'|update)'
     r'\.[a-z0-9_.]+)"')
 ENTRY = re.compile(r'([A-Za-z0-9_.]+)\s*=')
 

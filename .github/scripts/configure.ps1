@@ -5,12 +5,17 @@
 # the PCH would cost every run a full rebuild. It also hides a TU that stopped
 # including what it uses.
 #
-# In: PRESET
+# In: PRESET, REBLUE_UPDATE_BASE (optional), REBLUE_UPDATE_CHANNEL,
+#     REBLUE_VERSION_SUFFIX (optional)
 $ErrorActionPreference = 'Stop'
 
 $sdk = Join-Path $PWD "sdk/win-amd64"
+$channel = if ($env:REBLUE_UPDATE_CHANNEL) { $env:REBLUE_UPDATE_CHANNEL } else { "stable" }
+$updateUrl = if ($env:REBLUE_UPDATE_BASE) { "$env:REBLUE_UPDATE_BASE/manifest/$channel.toml" } else { "" }
 cmake --preset $env:PRESET `
   "-DCMAKE_PREFIX_PATH=$sdk" `
+  "-DREBLUE_UPDATE_URL=$updateUrl" `
+  "-DREBLUE_VERSION_SUFFIX=$env:REBLUE_VERSION_SUFFIX" `
   "-DREBLUE_PCH=OFF" `
   "-DCMAKE_C_COMPILER_LAUNCHER=sccache" `
   "-DCMAKE_CXX_COMPILER_LAUNCHER=sccache"

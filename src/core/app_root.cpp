@@ -10,6 +10,8 @@
 #include <rex/filesystem.h>
 #include <rex/platform/env.h>
 
+#include "core/settings.h"
+
 namespace bd {
 
 namespace {
@@ -24,6 +26,8 @@ bool IsMacAppBundle() {
          contents_dir.parent_path().extension() == ".app";
 }
 #endif
+
+std::filesystem::path g_app_root_override;
 
 } // namespace
 
@@ -49,7 +53,20 @@ std::filesystem::path UserConfigFolder() {
   return {};
 }
 
+void SetAppRoot(const std::filesystem::path &root) {
+  if (!root.empty())
+    g_app_root_override = root;
+}
+
+std::filesystem::path CacheRootFor(const std::filesystem::path &root) {
+  const auto &override_path = bd::Settings::Get().CachePath();
+  return override_path.empty() ? root / "cache"
+                               : std::filesystem::path(override_path);
+}
+
 std::filesystem::path AppRootFolder() {
+  if (!g_app_root_override.empty())
+    return g_app_root_override;
 #if !defined(_WIN32)
   // An AppImage mount is a read-only FUSE, so nothing can be written beside the
   // executable. Everything else keeps the exe dir layout.

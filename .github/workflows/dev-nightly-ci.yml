@@ -4,6 +4,8 @@ name: Dev nightly CI
 # publishes it as a prerelease, keeping the 10 most recent. The tag is stable
 # per dev+sdk combo, so a rerun of the same combo skips without building.
 #
+# Windows and Linux only. macOS builds on tagged releases, not nightly.
+#
 # GitHub only fires `schedule` from the default branch, so this file has to be
 # on main for the cron to run. It skips quietly while `development` is absent.
 
@@ -76,6 +78,8 @@ jobs:
       ref: ${{ needs.resolve.outputs.dev_sha }}
       sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
       asset_base: ${{ needs.resolve.outputs.asset_base }}
+      update_channel: nightly
+      version_suffix: ".${{ github.run_number }}"
     secrets: inherit
 
   linux:
@@ -86,20 +90,12 @@ jobs:
       ref: ${{ needs.resolve.outputs.dev_sha }}
       sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
       asset_base: ${{ needs.resolve.outputs.asset_base }}
-    secrets: inherit
-
-  macos:
-    needs: resolve
-    if: needs.resolve.outputs.should_build == 'true'
-    uses: ./.github/workflows/_build-macos.yml
-    with:
-      ref: ${{ needs.resolve.outputs.dev_sha }}
-      sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
-      asset_base: ${{ needs.resolve.outputs.asset_base }}
+      update_channel: nightly
+      version_suffix: ".${{ github.run_number }}"
     secrets: inherit
 
   publish:
-    needs: [resolve, windows, linux, macos]
+    needs: [resolve, windows, linux]
     if: needs.resolve.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -126,7 +122,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.resolve.outputs.tag_name }}
-          name: reblue v${{ needs.resolve.outputs.version }} dev nightly
+          name: reblue v${{ needs.resolve.outputs.version }}.${{ github.run_number }} dev nightly
           body_path: notes.md
           prerelease: true
           target_commitish: ${{ needs.resolve.outputs.dev_sha }}
@@ -134,6 +130,26 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate manifest
+        run: |
+          python3 tools/gen_manifest.py \
+            "${{ needs.resolve.outputs.version }}.${{ github.run_number }}" \
+            artifacts \
+            "${{ vars.UPDATE_BASE_URL }}/app/v${{ needs.resolve.outputs.version }}.${{ github.run_number }}" \
+            "https://github.com/${{ github.repository }}/releases/tag/${{ needs.resolve.outputs.tag_name }}" \
+            artifacts/manifest.toml \
+            --content-url "${{ vars.UPDATE_BASE_URL }}/manifest/content.toml"
+
+      - name: Publish to R2
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}.${{ github.run_number }}
+          PRERELEASE: "true"
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: bash .github/scripts/publish-r2.sh
 
       - name: Prune old nightlies
         env:

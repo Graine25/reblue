@@ -1,0 +1,66 @@
+/**
+ * @file    ui/update_status.cpp
+ * @copyright Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
+ *            All rights reserved.
+ * @license   BSD 3-Clause License
+ *            See LICENSE file in the project root for full license text.
+ */
+#include "ui/update_status.h"
+
+#include <string>
+
+#include <imgui.h>
+
+#include "core/i18n.h"
+#include "platform/platform.h"
+
+namespace bd::ui {
+
+namespace {
+
+// The content sync starts once the manifest naming it has been read, so this
+// order is also the order they run in.
+std::string CurrentLine() {
+  using Updates = bd::platform::Updates;
+  using Sync = bd::platform::ContentSync;
+
+  if (Updates::Get().State() == Updates::Stage::kChecking)
+    return i18n::Text("update.status.checking");
+
+  auto &sync = Sync::Get();
+  switch (sync.State()) {
+  case Sync::Stage::kChecking:
+    return i18n::Text("update.status.content");
+  case Sync::Stage::kFetching:
+    return i18n::Fmt("update.status.downloading", sync.Current(),
+                     sync.Done() + 1, sync.Total());
+  default:
+    return {};
+  }
+}
+
+} // namespace
+
+UpdateStatusOverlay::UpdateStatusOverlay(rex::ui::ImGuiDrawer *drawer)
+    : rex::ui::ImGuiDialog(drawer) {}
+
+UpdateStatusOverlay::~UpdateStatusOverlay() = default;
+
+bool UpdateStatusOverlay::Finished() { return CurrentLine().empty(); }
+
+void UpdateStatusOverlay::OnDraw(ImGuiIO &io) {
+  const std::string line = CurrentLine();
+  if (line.empty())
+    return;
+
+  constexpr float kPad = 10.0f;
+  constexpr ImU32 kText = IM_COL32(255, 255, 255, 140);
+  constexpr ImU32 kShadow = IM_COL32(0, 0, 0, 128);
+
+  ImDrawList *dl = ImGui::GetForegroundDrawList();
+  const ImVec2 pos(kPad, io.DisplaySize.y - kPad - ImGui::GetTextLineHeight());
+  dl->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), kShadow, line.c_str());
+  dl->AddText(pos, kText, line.c_str());
+}
+
+} // namespace bd::ui

@@ -15,7 +15,11 @@ set(reblue_installer_only
     installer/disc_install.cpp
     installer/disc_install.h
     installer/installer_wizard.cpp
-    installer/installer_wizard.h)
+    installer/installer_wizard.h
+    installer/self_install.cpp
+    installer/self_install.h
+    installer/upgrade_prompt.cpp
+    installer/upgrade_prompt.h)
 
 list(REMOVE_ITEM reblue_all ${reblue_d3d12_only} ${reblue_installer_only})
 

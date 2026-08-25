@@ -51,6 +51,35 @@ protected:
 private:
   explicit ReblueApp(rex::ui::WindowedAppContext &ctx);
 
+  // Paths for booting against a recorded install. One owner: the resume that
+  // follows the upgrade prompt has to reach the same answer OnFinalizePaths
+  // would have returned.
+  rex::PathConfig PathsForInstall(const rex::PathConfig &defaults,
+                                  const bd::installer::InstallConfig &cfg);
+
+  // Whether this build reached an install it did not write from outside it,
+  // meaning the upgrade copies binaries and has to ask first.
+  bool NeedsUpgradePrompt(const bd::installer::InstallConfig &cfg) const;
+
+  // Restamps the record so the upgrade is not offered again. Everything the
+  // prompt path does beyond this is in FinishUpgrade.
+  void RestampInstall(const bd::installer::InstallConfig &cfg);
+
+#if defined(_WIN32) && defined(REBLUE_BUILD_INSTALLER)
+  // Raises the prompt over the pre-guest pump and hands the answer to
+  // FinishUpgrade. The caller returns nullopt: this owns what happens next.
+  void BeginUpgrade(const bd::installer::InstallConfig &cfg,
+                    rex::PathConfig defaults,
+                    std::function<void(rex::PathConfig)> resume);
+
+  // Accepted: copies this build in, restamps, and relaunches from the install.
+  // Declined: boots the install as it stands, leaving the record alone so the
+  // offer comes back next launch.
+  void FinishUpgrade(bool accepted, bd::installer::InstallConfig cfg,
+                     rex::PathConfig defaults,
+                     std::function<void(rex::PathConfig)> resume);
+#endif
+
 #ifdef REBLUE_BUILD_INSTALLER
   void FinishInstaller(rex::PathConfig defaults,
                        std::function<void(rex::PathConfig)> resume,
@@ -70,7 +99,19 @@ private:
   void SetPerfOverlayStage(bd::ui::OverlayStage stage,
                            rex::ui::ImGuiDrawer *drawer);
 
-  // Owned via the derived type: ImGuiDialog's destructor is non-virtual.
+  // Raises the update prompt the first time Updates::Newer() has an answer.
+  // Polled from the per-frame overlay marshal rather than a new pump.
+  void MaybeShowUpdatePrompt();
+
+  // Raises the corner readout while either startup check is still working,
+  // and drops it once neither has anything to report.
+  void UpdateCheckStatus();
+
+  // Whether either startup check still has something to put on screen. The
+  // overlay gate needs this because the calls that raise those dialogs run
+  // behind it, so HasDialogs alone would never let the first one through.
+  bool PendingOverlayWork() const;
+
 #ifdef REBLUE_BUILD_INSTALLER
   std::unique_ptr<bd::installer::InstallerWizard> installer_wizard_;
 #endif
@@ -81,6 +122,12 @@ private:
   // Raw observer: ImGuiDialog self-deletes on Close(), and the on_closed lambda
   // nulls this back to nullptr.
   bd::ui::ReportIssueDialog *report_issue_ = nullptr;
+  bool update_prompt_shown_ = false;
+  std::unique_ptr<bd::ui::UpdateStatusOverlay> update_status_;
+
+#if defined(_WIN32) && defined(REBLUE_BUILD_INSTALLER)
+  std::unique_ptr<bd::installer::UpgradePrompt> upgrade_prompt_;
+#endif
 
   std::thread pre_guest_tick_thread_;
   std::atomic<bool> pre_guest_pump_stop_{false};

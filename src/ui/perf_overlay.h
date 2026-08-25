@@ -35,7 +35,6 @@ inline constexpr OverlayStage NextOverlayStage(OverlayStage s) {
              : static_cast<OverlayStage>(static_cast<int>(s) + 1);
 }
 
-// Own via the concrete type: ImGuiDialog's destructor is not virtual.
 class PerfOverlay final : public rex::ui::ImGuiDialog {
 public:
   explicit PerfOverlay(rex::ui::ImGuiDrawer *drawer);

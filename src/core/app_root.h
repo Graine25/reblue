@@ -22,6 +22,14 @@ bool IsPackagedApplication();
 // writable per-user location instead of modifying their package contents.
 std::filesystem::path AppRootFolder();
 
+// Overrides the above once an install root is known, so cache and logs sit
+// with the game data instead of beside the executable.
+void SetAppRoot(const std::filesystem::path &root);
+
+// The cache directory for an install rooted at 'root'. Honors the cache path
+// override, so it is the same answer the game reaches at boot.
+std::filesystem::path CacheRootFor(const std::filesystem::path &root);
+
 // XDG_CONFIG_HOME or ~/.config with reblue's folder appended. Empty when
 // neither is set, and on Windows, which anchors this data in HKCU.
 std::filesystem::path UserConfigFolder();

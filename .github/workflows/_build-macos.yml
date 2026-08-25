@@ -20,6 +20,16 @@ on:
         description: "Asset name stem, from _resolve.yml"
         required: true
         type: string
+      update_channel:
+        description: "Manifest channel this build checks: stable or nightly"
+        required: false
+        type: string
+        default: stable
+      version_suffix:
+        description: "Appended to the project version, e.g. .417 for a nightly"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -48,6 +58,9 @@ jobs:
       SDK_SLICE: mac-${{ matrix.arch }}
       PRESET: mac-${{ matrix.arch }}-release
       COMPILER_LAUNCHER: ccache
+      REBLUE_UPDATE_BASE: ${{ vars.UPDATE_BASE_URL }}
+      REBLUE_UPDATE_CHANNEL: ${{ inputs.update_channel }}
+      REBLUE_VERSION_SUFFIX: ${{ inputs.version_suffix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

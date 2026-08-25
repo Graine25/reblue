@@ -46,9 +46,9 @@ Requires all three retail Blue Dragon discs or their disc images. Steam Deck is 
 
 1. Blue Dragon shipped on three DVDs, and you will need a disc image of each one from your own copy of the game.
 
-2. Run the executable. A setup wizard will guide you through the rest. You will be asked to point it at each of the three disc images in turn, and it will check each one before letting you continue.
+2. Run the executable. A setup wizard will guide you through the rest. You will be asked to point it at each of the three disc images in turn, and it will check each one before letting you continue. Once you pick where to install, the program copies itself there and restarts from that location, so you can delete the folder you extracted the zip into.
 
-3. Pick a graphics quality preset and choose where to install. The wizard copies the game files out of the discs, and you are done. You may also install DLC from this installer or from the main menu under the config menu
+3. Pick a graphics quality preset. The wizard copies the game files out of the discs, and you are done. You may also install DLC from this installer or from the main menu under the config menu
 
 The wizard only needs to run once. If something later goes missing from your install, launching with `--repair` reopens it on your existing install and copies back only what it needs.
 
@@ -130,7 +130,7 @@ cmake --preset win-amd64-release       # or linux-amd64-release
 cmake --build --preset win-amd64-release
 ```
 
-Presets cover `win-amd64`, `win-vk`, `linux-amd64`, `linux-arm64`, `mac-amd64`, and `mac-arm64`, each in Debug, Release, and RelWithDebInfo. A `win-amd64` preset builds both the DX12 and the Vulkan executable, and a `win-vk` one builds the Vulkan executable alone. As with running the game, building requires the files from your own copy of Blue Dragon.
+Presets cover `win-amd64`, `win-vk`, `linux-amd64`, `linux-arm64`, `mac-amd64`, and `mac-arm64`, each in Debug, Release, and RelWithDebInfo. A `win-amd64` preset builds both the DX12 executable (`reblue.exe`) and the Vulkan one (`reblue_vk.exe`), and a `win-vk` one builds the Vulkan executable alone. As with running the game, building requires the files from your own copy of Blue Dragon.
 
 ## Credits
 

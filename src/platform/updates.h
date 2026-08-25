@@ -10,31 +10,94 @@
 #pragma once
 
 #include <atomic>
+#include <filesystem>
 #include <mutex>
 #include <optional>
 #include <string>
 
+#include <rex/types.h>
+
+#include "platform/http.h"
+#include "platform/manifest.h"
+
 namespace bd::platform {
 
 struct Release {
-  std::string version; // the git tag, "v0.76.74"
-  std::string url;     // the release page it redirected to
+  std::string version; // the app version the manifest names
+  std::string url;     // its notes_url
 };
 
-// Asks bd_update_url which release is latest and compares it with this build.
-// GitHub answers /releases/latest with a 302 whose Location names the tag, so
-// one request settles it and no page body is downloaded. Runs on its own
-// thread: nothing on the boot path waits on it.
+// Fetches bd_update_url as a manifest and compares the app version it names
+// against this build. Runs on its own thread: nothing on the boot path waits
+// on it.
 class Updates {
 public:
   static Updates &Get();
 
-  // One check for the life of the process, and only when bd_update_check is
-  // set. Returns immediately.
+  enum class Stage {
+    kIdle,     // disabled, or no endpoint to ask
+    kChecking, // waiting on the manifest
+    kDone,     // answered, whatever the answer was
+  };
+
+  enum class ApplyStage {
+    kIdle,    // nothing asked for
+    kWorking, // downloading, verifying, unpacking
+    kDone,    // finished, with Applied naming the outcome
+  };
+
+  enum class ApplyResult {
+    kStaged,         // verified and ready, installs on the next launch
+    kNoUpdate,       // no manifest yet, or it names no build for this platform
+    kDownloadFailed, // network/HTTP failure
+    kHashMismatch,   // downloaded bytes do not match the manifest's sha256
+    kUnpackFailed,   // corrupt archive or wrong contents
+  };
+
+  // Fetches the one document this build asks for, once, when
+  // bd_update_check is set. Returns immediately. Call once the VFS is up,
+  // since the content sync it hands off to reconciles against the VFS
+  // catalog.
   void Start();
+
+  Stage State() const;
 
   // Set once the check finds a release newer than this build.
   std::optional<Release> Newer() const;
+
+  // The same answer without taking the lock, for callers polling per frame.
+  bool HasNewer() const;
+
+  // Whether this platform can install what the apply downloads. False means
+  // the check still runs and still logs, but nothing offers the user an
+  // update it would then fail to apply.
+  static constexpr bool CanApply() {
+#if defined(_WIN32)
+    return true;
+#else
+    return false;
+#endif
+  }
+
+  // The manifest the last successful check read, whatever it said about
+  // versions.
+  std::optional<AppManifest> Current() const;
+
+  // Downloads the build this platform's manifest entry names, verifies it and
+  // unpacks it to <install>/.update, on a detached thread. Returns
+  // immediately, and InstallStagedUpdate puts it in place on the next launch.
+  // The progress and the outcome are read back below rather than handed to a
+  // callback, so nothing that raised this has to outlive it.
+  void BeginApply(const std::filesystem::path &install_root);
+
+  ApplyStage ApplyState() const;
+
+  // Set once ApplyState reaches kDone.
+  ApplyResult Applied() const;
+
+  // Bytes transferred and the total the server named, 0 when it named none.
+  u64 ApplyBytesDone() const;
+  u64 ApplyBytesTotal() const;
 
 private:
   Updates() = default;
@@ -42,10 +105,30 @@ private:
   Updates &operator=(const Updates &) = delete;
 
   void Check(const std::string &url);
+  ApplyResult Apply(const std::filesystem::path &install_root);
 
   mutable std::mutex mutex_;
   std::optional<Release> newer_;
+  std::optional<AppManifest> manifest_;
   std::atomic<bool> started_{false};
+  std::atomic<Stage> stage_{Stage::kIdle};
+  std::atomic<bool> has_newer_{false};
+
+  std::atomic<bool> apply_started_{false};
+  std::atomic<ApplyStage> apply_stage_{ApplyStage::kIdle};
+  std::atomic<ApplyResult> apply_result_{ApplyResult::kNoUpdate};
+  std::atomic<u64> apply_done_{0};
+  std::atomic<u64> apply_total_{0};
 };
+
+// Installs a staged update over the install root, then clears the staging
+// tree. True if files were replaced, meaning this process is now stale and
+// must restart into what it just wrote. Call before anything opens the files
+// under the install root. Either every file swaps or none does.
+bool InstallStagedUpdate(const std::filesystem::path &install_root);
+
+// Deletes the predecessors a previous InstallStagedUpdate renamed out of the
+// way, and retries on a later launch whatever is still locked.
+void ClearReplacedFiles(const std::filesystem::path &install_root);
 
 } // namespace bd::platform

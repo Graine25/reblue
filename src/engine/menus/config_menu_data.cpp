@@ -8,6 +8,7 @@
 #include "engine/menus/config_menu_data.h"
 #include "core/logging.h"
 #include "core/settings_model.h"
+#include "core/zip_unpack.h"
 #include "engine/achievements/achievement_list.h"
 #include "engine/menus/achievements_layout.h"
 #include "engine/menus/achievements_menu.h"
@@ -231,6 +232,13 @@ bool InstallModFromZip(const std::filesystem::path &zip_path,
     std::string relative = name;
     if (!prefix.empty() && name.starts_with(prefix))
       relative = name.substr(prefix.size());
+
+    if (IsUnsafeArchivePath(relative)) {
+      BD_ERROR("[config] unsafe entry '{}' in zip {}", name,
+               zip_path.string());
+      extract_ok = false;
+      break;
+    }
 
     auto out_path = dest / relative;
     std::filesystem::create_directories(out_path.parent_path());

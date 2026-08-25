@@ -26,3 +26,4 @@
 #include "engine/settings.h"
 #include "engine/stat_breakdown.h"
 #include "engine/state_layout.h"
+#include "engine/virtual_buttons.h"

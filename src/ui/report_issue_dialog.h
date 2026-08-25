@@ -16,6 +16,8 @@
 
 #include <rex/ui/imgui_dialog.h>
 
+#include "engine/engine.h"
+
 struct ImGuiIO;
 
 namespace rex::ui {
@@ -32,7 +34,6 @@ struct ReportContext {
   u32 window_height = 0;
 };
 
-// Own via the concrete type: ImGuiDialog's destructor is not virtual.
 class ReportIssueDialog final : public rex::ui::ImGuiDialog {
 public:
   ReportIssueDialog(rex::ui::ImGuiDrawer *drawer, ReportContext ctx,
@@ -42,16 +43,12 @@ public:
   // Close requested externally (e.g. F12 pressed again while open).
   void RequestClose();
 
-  // Whether one is on screen, for the input layer: this needs a real pointer,
-  // and mouse look captures it. Its own lifetime answers the question, so
-  // nothing has to be told when it opens.
-  static bool AnyOpen();
-
 protected:
   void OnDraw(ImGuiIO &io) override;
   void OnClose() override;
 
 private:
+  engine::HostPointerClaim pointer_;
   ReportContext ctx_;
   std::function<void()> on_closed_;
   char description_[4096] = {0};

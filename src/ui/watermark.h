@@ -19,7 +19,6 @@ class ImGuiDrawer;
 
 namespace bd::ui {
 
-// Own via the concrete type: ImGuiDialog's destructor is not virtual.
 class WatermarkOverlay final : public rex::ui::ImGuiDialog {
 public:
   explicit WatermarkOverlay(rex::ui::ImGuiDrawer *drawer);

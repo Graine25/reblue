@@ -7,225 +7,31 @@
  */
 #include "platform/updates.h"
 
-// First in the file so any header below finds Windows.h already in, lean.
-#if defined(_WIN32)
-#include "core/windows_lean.h"
-
-#include <winhttp.h>
-#elif defined(REBLUE_HAVE_CURL)
-#include <curl/curl.h>
-#endif
-
-#include <charconv>
-#include <string_view>
-#include <system_error>
+#include <algorithm>
+#include <fstream>
 #include <thread>
+#include <vector>
 
+#include <rex/filesystem.h>
 #include <rex/types.h>
 
+#include "core/app_root.h"
 #include "core/build_info.h"
-#include "core/encoding.h"
 #include "core/logging.h"
 #include "core/settings.h"
+#include "platform/content_sync.h"
+#include "platform/manifest.h"
+#include "platform/package.h"
 
 namespace bd::platform {
 namespace {
 
-constexpr u32 kTimeoutMs = 10000;
+// Staging sits in the install root rather than the cache because the install
+// runs before any config is read, and the cache path is a config value.
+constexpr const char *kStagingDir = ".update";
 
-struct Redirect {
-  int status = 0;
-  std::string location;
-};
-
-#if defined(_WIN32)
-
-struct Handle {
-  HINTERNET h = nullptr;
-  ~Handle() {
-    if (h)
-      WinHttpCloseHandle(h);
-  }
-};
-
-bool FetchRedirect(const std::string &url, Redirect &out, std::string &error) {
-  const std::wstring wide = bd::Utf8ToWide(url);
-
-  // Non-zero lengths against null pointers ask for offsets into 'wide'.
-  URL_COMPONENTS parts{};
-  parts.dwStructSize = sizeof(parts);
-  parts.dwHostNameLength = static_cast<DWORD>(-1);
-  parts.dwUrlPathLength = static_cast<DWORD>(-1);
-  parts.dwExtraInfoLength = static_cast<DWORD>(-1);
-  if (!WinHttpCrackUrl(wide.c_str(), 0, 0, &parts)) {
-    error = "cannot parse " + url;
-    return false;
-  }
-  if (parts.lpszHostName == nullptr || parts.dwHostNameLength == 0) {
-    error = "no host in " + url;
-    return false;
-  }
-  const std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
-  std::wstring path;
-  if (parts.lpszUrlPath != nullptr)
-    path.assign(parts.lpszUrlPath, parts.dwUrlPathLength);
-  if (parts.lpszExtraInfo != nullptr)
-    path.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
-  if (path.empty())
-    path = L"/";
-
-  const std::wstring agent = bd::Utf8ToWide("reblue/" REBLUE_VERSION_STRING);
-  Handle session{WinHttpOpen(agent.c_str(), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
-                             WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS,
-                             0)};
-  if (!session.h) {
-    error = "WinHttpOpen failed";
-    return false;
-  }
-  WinHttpSetTimeouts(session.h, kTimeoutMs, kTimeoutMs, kTimeoutMs, kTimeoutMs);
-
-  Handle connection{WinHttpConnect(session.h, host.c_str(), parts.nPort, 0)};
-  if (!connection.h) {
-    error = "cannot reach " + bd::WideToUtf8(host);
-    return false;
-  }
-
-  const DWORD flags =
-      parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0;
-  Handle request{WinHttpOpenRequest(connection.h, L"HEAD", path.c_str(),
-                                    nullptr, WINHTTP_NO_REFERER,
-                                    WINHTTP_DEFAULT_ACCEPT_TYPES, flags)};
-  if (!request.h) {
-    error = "WinHttpOpenRequest failed";
-    return false;
-  }
-
-  // The redirect is the answer, so following it would only fetch a page of
-  // HTML nothing here reads.
-  DWORD disable = WINHTTP_DISABLE_REDIRECTS;
-  WinHttpSetOption(request.h, WINHTTP_OPTION_DISABLE_FEATURE, &disable,
-                   sizeof(disable));
-
-  if (!WinHttpSendRequest(request.h, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                          WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
-      !WinHttpReceiveResponse(request.h, nullptr)) {
-    error = "no reply from " + bd::WideToUtf8(host);
-    return false;
-  }
-
-  DWORD status = 0;
-  DWORD size = sizeof(status);
-  if (!WinHttpQueryHeaders(
-          request.h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-          WINHTTP_HEADER_NAME_BY_INDEX, &status, &size,
-          WINHTTP_NO_HEADER_INDEX)) {
-    error = "reply carried no status";
-    return false;
-  }
-  out.status = static_cast<int>(status);
-
-  size = 0;
-  WinHttpQueryHeaders(request.h, WINHTTP_QUERY_LOCATION,
-                      WINHTTP_HEADER_NAME_BY_INDEX, nullptr, &size,
-                      WINHTTP_NO_HEADER_INDEX);
-  if (size > 0 && GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-    std::wstring location(size / sizeof(wchar_t), L'\0');
-    if (WinHttpQueryHeaders(request.h, WINHTTP_QUERY_LOCATION,
-                            WINHTTP_HEADER_NAME_BY_INDEX, location.data(),
-                            &size, WINHTTP_NO_HEADER_INDEX)) {
-      while (!location.empty() && location.back() == L'\0')
-        location.pop_back();
-      out.location = bd::WideToUtf8(location);
-    }
-  }
-  return true;
-}
-
-#elif defined(REBLUE_HAVE_CURL)
-
-bool FetchRedirect(const std::string &url, Redirect &out, std::string &error) {
-  static std::once_flag curl_once;
-  std::call_once(curl_once, [] { curl_global_init(CURL_GLOBAL_DEFAULT); });
-
-  CURL *curl = curl_easy_init();
-  if (curl == nullptr) {
-    error = "curl_easy_init failed";
-    return false;
-  }
-
-  char message[CURL_ERROR_SIZE] = {};
-  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-  curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
-  curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(kTimeoutMs));
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "reblue/" REBLUE_VERSION_STRING);
-  curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, message);
-
-  const CURLcode result = curl_easy_perform(curl);
-  if (result != CURLE_OK) {
-    error = message[0] != '\0' ? message : curl_easy_strerror(result);
-    curl_easy_cleanup(curl);
-    return false;
-  }
-
-  long status = 0;
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-  out.status = static_cast<int>(status);
-  char *location = nullptr;
-  curl_easy_getinfo(curl, CURLINFO_REDIRECT_URL, &location);
-  if (location != nullptr)
-    out.location = location;
-  curl_easy_cleanup(curl);
-  return true;
-}
-
-#else
-
-bool FetchRedirect(const std::string &, Redirect &, std::string &error) {
-  error = "this build has no HTTP client (libcurl was not found)";
-  return false;
-}
-
-#endif
-
-// A published release redirects to /releases/tag/<tag>. A repository with none
-// answers 404 or redirects to the releases index, and neither carries a tag.
-bool TagFromLocation(const std::string &location, std::string &tag) {
-  constexpr std::string_view kMarker = "/releases/tag/";
-  const size_t at = location.find(kMarker);
-  if (at == std::string::npos)
-    return false;
-  tag = location.substr(at + kMarker.size());
-  const size_t extra = tag.find_first_of("?#");
-  if (extra != std::string::npos)
-    tag.resize(extra);
-  return !tag.empty();
-}
-
-// Anything that is not a digit separates components, so a leading v and an
-// -rc suffix both fall out.
-int CompareVersions(std::string_view a, std::string_view b) {
-  auto next = [](std::string_view &s) -> u32 {
-    while (!s.empty() && (s.front() < '0' || s.front() > '9'))
-      s.remove_prefix(1);
-    u32 value = 0;
-    const auto [end, ec] =
-        std::from_chars(s.data(), s.data() + s.size(), value);
-    if (ec != std::errc()) {
-      s = {};
-      return 0;
-    }
-    s.remove_prefix(static_cast<size_t>(end - s.data()));
-    return value;
-  };
-  while (!a.empty() || !b.empty()) {
-    const u32 lhs = next(a);
-    const u32 rhs = next(b);
-    if (lhs != rhs)
-      return lhs < rhs ? -1 : 1;
-  }
-  return 0;
-}
+// Written last, so an interrupted download can never look installable.
+constexpr const char *kReadyMarker = "ready";
 
 } // namespace
 
@@ -235,51 +41,333 @@ Updates &Updates::Get() {
 }
 
 void Updates::Start() {
-  if (!bd::Settings::Get().UpdateCheck())
+  const auto &settings = bd::Settings::Get();
+  if (!settings.UpdateCheck())
     return;
-  const std::string url = bd::Settings::Get().UpdateUrl();
-  if (url.empty())
+  const std::string url = settings.UpdateUrl();
+  if (url.empty()) {
+    BD_INFO("No update endpoint, skipping the update and content checks");
     return;
+  }
   if (started_.exchange(true))
     return;
+  stage_.store(Stage::kChecking);
 
   // Detached: the ordered exit kills the process outright, so a check still
   // waiting on the network never holds shutdown up.
   std::thread([this, url] { Check(url); }).detach();
 }
 
+Updates::Stage Updates::State() const { return stage_.load(); }
+
+bool Updates::HasNewer() const { return has_newer_.load(); }
+
 std::optional<Release> Updates::Newer() const {
   std::lock_guard lock(mutex_);
   return newer_;
 }
 
+std::optional<AppManifest> Updates::Current() const {
+  std::lock_guard lock(mutex_);
+  return manifest_;
+}
+
 void Updates::Check(const std::string &url) {
   std::string error;
-  Redirect redirect;
-  if (!FetchRedirect(url, redirect, error)) {
-    BD_WARN("Update check against {} failed: {}", url, error);
+  auto manifest = AppManifest::Fetch(url, error);
+  if (!manifest) {
+    BD_WARN("Manifest fetch from {} failed: {}", url, error);
+    stage_.store(Stage::kDone);
     return;
   }
 
-  std::string tag;
-  if (!TagFromLocation(redirect.location, tag)) {
-    BD_INFO("Update check: {} names no release yet (HTTP {})", url,
-            redirect.status);
-    return;
+  const Artifact *artifact = manifest->ArtifactForThisPlatform();
+  const bool newer =
+      Version::Compare(manifest->app_version, REBLUE_VERSION_STRING) > 0;
+  const std::string content_url = manifest->content_url;
+
+  {
+    std::lock_guard lock(mutex_);
+    manifest_ = std::move(manifest);
+    if (!newer) {
+      BD_INFO("v" REBLUE_VERSION_STRING " is current");
+    } else if (artifact == nullptr) {
+      BD_INFO("v{} is available but names no build for {}",
+              manifest_->app_version, AppManifest::PlatformKey());
+    } else {
+      BD_INFO("Update available: v{} (this build is v" REBLUE_VERSION_STRING
+              ")",
+              manifest_->app_version);
+      newer_ = Release{manifest_->app_version, manifest_->notes_url};
+      has_newer_.store(true);
+    }
   }
 
-  if (CompareVersions(tag, REBLUE_VERSION_STRING) <= 0) {
-    BD_INFO("Update check: v" REBLUE_VERSION_STRING " is current, latest is {}",
-            tag);
-    return;
-  }
+  stage_.store(Stage::kDone);
 
-  BD_INFO("Update available: {} (this build is v" REBLUE_VERSION_STRING ")",
-          tag);
-  BD_INFO("  {}", redirect.location);
-
-  std::lock_guard lock(mutex_);
-  newer_ = Release{tag, redirect.location};
+  // Packs carry their own versions and their own document, so this runs
+  // whether or not the app itself has an update waiting.
+  ContentSync::Get().Start(content_url);
 }
+
+Updates::ApplyStage Updates::ApplyState() const { return apply_stage_.load(); }
+
+Updates::ApplyResult Updates::Applied() const { return apply_result_.load(); }
+
+u64 Updates::ApplyBytesDone() const { return apply_done_.load(); }
+
+u64 Updates::ApplyBytesTotal() const { return apply_total_.load(); }
+
+void Updates::BeginApply(const std::filesystem::path &install_root) {
+  if (apply_started_.exchange(true))
+    return;
+  apply_done_.store(0);
+  apply_total_.store(0);
+  apply_stage_.store(ApplyStage::kWorking);
+
+  // Detached, and this singleton outlives the process: nothing that raised the
+  // offer has to stay alive for the download, and quitting mid-download never
+  // waits on it.
+  std::thread([this, install_root] {
+    apply_result_.store(Apply(install_root));
+    apply_stage_.store(ApplyStage::kDone);
+  }).detach();
+}
+
+Updates::ApplyResult Updates::Apply(const std::filesystem::path &install_root) {
+#if !defined(_WIN32)
+  (void)install_root;
+  BD_INFO("Update apply is Windows only for now");
+  return ApplyResult::kNoUpdate;
+#else
+  const DownloadProgress progress = [this](u64 done, u64 total) {
+    apply_done_.store(done, std::memory_order_relaxed);
+    if (total != 0)
+      apply_total_.store(total, std::memory_order_relaxed);
+  };
+  auto manifest = Current();
+  if (!manifest)
+    return ApplyResult::kNoUpdate;
+  const Artifact *artifact = manifest->ArtifactForThisPlatform();
+  if (artifact == nullptr) {
+    BD_WARN("Manifest names no build for {}", AppManifest::PlatformKey());
+    return ApplyResult::kNoUpdate;
+  }
+
+  namespace fs = std::filesystem;
+  const auto zip = bd::CacheRootFor(install_root) / "update" /
+                   ("reblue-" + manifest->app_version + ".zip");
+  const auto staging = install_root / kStagingDir;
+
+  BD_INFO("Downloading v{} ({} bytes)", manifest->app_version, artifact->size);
+  switch (
+      Package::Fetch(artifact->url, artifact->sha256, zip, staging, progress)) {
+  case Package::Result::kOk:
+    break;
+  case Package::Result::kDownloadFailed:
+    return ApplyResult::kDownloadFailed;
+  case Package::Result::kHashMismatch:
+    return ApplyResult::kHashMismatch;
+  case Package::Result::kUnpackFailed:
+    return ApplyResult::kUnpackFailed;
+  }
+
+  std::error_code ec;
+  if (!fs::exists(staging / "reblue.exe", ec)) {
+    BD_ERROR("Update archive holds no reblue.exe");
+    fs::remove_all(staging, ec);
+    return ApplyResult::kUnpackFailed;
+  }
+
+  std::ofstream ready(staging / kReadyMarker, std::ios::binary);
+  ready << manifest->app_version;
+  ready.close();
+  if (!ready) {
+    BD_ERROR("Could not mark the staged update ready");
+    fs::remove_all(staging, ec);
+    return ApplyResult::kUnpackFailed;
+  }
+  BD_INFO("v{} staged, installs on the next launch", manifest->app_version);
+  return ApplyResult::kStaged;
+#endif
+}
+
+#if defined(_WIN32)
+namespace {
+
+namespace fs = std::filesystem;
+
+// Windows locks a loaded image against overwrite but not against rename, and
+// that covers rexruntime.dll and the DXC pair as much as the exes. So every
+// byte is written beside its target first, and only then does each file swap
+// in.
+constexpr const wchar_t *kIncomingSuffix = L".incoming";
+constexpr const wchar_t *kReplacedSuffix = L".replaced";
+
+// Names what the last install moved aside, so the next launch deletes exactly
+// those instead of walking an install root that holds the whole game.
+constexpr const char *kReplacedList = ".replaced-files";
+
+std::vector<fs::path> StagedFiles(const fs::path &staging,
+                                  std::error_code &ec) {
+  std::vector<fs::path> out;
+  for (fs::recursive_directory_iterator it(staging, ec), end; it != end;
+       it.increment(ec)) {
+    if (ec)
+      return out;
+    if (it->is_directory(ec))
+      continue;
+    auto rel = fs::relative(it->path(), staging, ec);
+    if (ec || rel.empty() || rel == fs::path(kReadyMarker))
+      continue;
+    out.push_back(std::move(rel));
+  }
+  return out;
+}
+
+void RemoveIncoming(const fs::path &install_root,
+                    const std::vector<fs::path> &files) {
+  std::error_code ec;
+  for (const auto &rel : files)
+    fs::remove((install_root / rel).native() + kIncomingSuffix, ec);
+}
+
+std::vector<std::string> ReadReplacedList(const fs::path &path) {
+  std::vector<std::string> out;
+  std::ifstream list(path, std::ios::binary);
+  std::string rel;
+  while (std::getline(list, rel)) {
+    if (!rel.empty())
+      out.push_back(rel);
+  }
+  return out;
+}
+
+void WriteReplacedList(const fs::path &path,
+                       const std::vector<std::string> &entries) {
+  std::error_code ec;
+  if (entries.empty()) {
+    fs::remove(path, ec);
+    return;
+  }
+  std::ofstream list(path, std::ios::binary);
+  for (const auto &rel : entries)
+    list << rel << "\n";
+}
+
+} // namespace
+
+bool InstallStagedUpdate(const fs::path &install_root) {
+  std::error_code ec;
+  const auto staging = install_root / kStagingDir;
+  if (!fs::exists(staging / kReadyMarker, ec))
+    return false;
+
+  const auto files = StagedFiles(staging, ec);
+  if (ec || files.empty()) {
+    BD_ERROR("Staged update is unreadable, discarding it");
+    fs::remove_all(staging, ec);
+    return false;
+  }
+
+  // Phase one writes every byte. A failure here has touched nothing under the
+  // install root, so the staging tree stays for the next launch to retry.
+  for (const auto &rel : files) {
+    const auto incoming = (install_root / rel).native() + kIncomingSuffix;
+    fs::create_directories((install_root / rel).parent_path(), ec);
+    fs::copy_file(staging / rel, incoming, fs::copy_options::overwrite_existing,
+                  ec);
+    if (ec) {
+      BD_ERROR("Update install could not write {}: {}", rel.string(),
+               ec.message());
+      RemoveIncoming(install_root, files);
+      return false;
+    }
+  }
+
+  // Phase two swaps. A failure part way through rolls back rather than leave a
+  // mixed install, and drops the marker so the next launch boots the version it
+  // already had instead of retrying a swap that will fail again.
+  std::vector<fs::path> swapped;
+  auto roll_back = [&] {
+    for (auto it = swapped.rbegin(); it != swapped.rend(); ++it) {
+      const auto dst = install_root / *it;
+      fs::remove(dst, ec);
+      fs::rename(dst.native() + kReplacedSuffix, dst, ec);
+    }
+    RemoveIncoming(install_root, files);
+    fs::remove(staging / kReadyMarker, ec);
+  };
+
+  // Whatever a previous install could not delete is still standing aside, so
+  // this adds to that list rather than replacing it and orphaning the file.
+  std::vector<std::string> replaced =
+      ReadReplacedList(install_root / kReplacedList);
+  for (const auto &rel : files) {
+    const auto dst = install_root / rel;
+    const auto aside = dst.native() + kReplacedSuffix;
+    const bool had_old = fs::exists(dst, ec);
+    if (had_old) {
+      fs::remove(aside, ec);
+      fs::rename(dst, aside, ec);
+      if (ec) {
+        BD_ERROR("Update install could not move {} aside: {}", rel.string(),
+                 ec.message());
+        roll_back();
+        return false;
+      }
+    }
+    fs::rename(dst.native() + kIncomingSuffix, dst, ec);
+    if (ec) {
+      BD_ERROR("Update install could not swap in {}: {}", rel.string(),
+               ec.message());
+      if (had_old)
+        fs::rename(aside, dst, ec);
+      roll_back();
+      return false;
+    }
+    if (had_old) {
+      swapped.push_back(rel);
+      auto name = rel.generic_string();
+      if (std::find(replaced.begin(), replaced.end(), name) == replaced.end())
+        replaced.push_back(std::move(name));
+    }
+  }
+
+  WriteReplacedList(install_root / kReplacedList, replaced);
+  fs::remove_all(staging, ec);
+  BD_INFO("Installed the staged update into {}", install_root.string());
+  return true;
+}
+
+void ClearReplacedFiles(const fs::path &install_root) {
+  const auto list_path = install_root / kReplacedList;
+  const auto entries = ReadReplacedList(list_path);
+  if (entries.empty())
+    return;
+
+  // The process that wrote the replacements is usually still exiting, so its
+  // own image and rexruntime.dll are still locked. Whatever will not go keeps
+  // its place in the list for a later launch.
+  std::error_code ec;
+  std::vector<std::string> pending;
+  for (const auto &rel : entries) {
+    const auto aside = (install_root / rel).native() + kReplacedSuffix;
+    fs::remove(aside, ec);
+    if (fs::exists(aside, ec))
+      pending.push_back(rel);
+  }
+  WriteReplacedList(list_path, pending);
+}
+#else
+bool InstallStagedUpdate(const std::filesystem::path &install_root) {
+  (void)install_root;
+  return false;
+}
+
+void ClearReplacedFiles(const std::filesystem::path &install_root) {
+  (void)install_root;
+}
+#endif
 
 } // namespace bd::platform

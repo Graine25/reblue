@@ -514,6 +514,7 @@ hud_fade_delay.label.us = "HUD Fade Delay"
 ui_language.label.us = "UI Language"
 ui_language.auto.us = "Auto ({})"
 voice_language.label.us = "@game:common/com_voice001|Voice Language"
+update_check.label.us = "Check for Updates on Startup"
 developer_mode.label.us = "Developer Mode"
 developer_mode.label.fr = "Mode développeur"
 developer_mode.label.it = "Modalità sviluppatore"
@@ -639,7 +640,7 @@ repair_notice.de = "Eine bereits vorhandene Installation wurde gefunden. Wähle 
 repair_notice.es = "Se detectó una instalación existente. Selecciona tus discos para agregar o reparar archivos de idioma; los archivos ya instalados se mantienen."
 repair_notice.fr = "Une installation préexistante a été détectée. Sélectionnez des disques pour ajouter ou réparer des fichiers de langue; les fichiers déjà installés ne seront pas affectés"
 repair_notice.it = "È stata rilevata un'installazione esistente. Seleziona i tuoi dischi per aggiungere o ripristinare i file della lingua; i file già installati non verranno modificati."
-update_check.us = "Check for a newer re:Blue release at startup"
+update_check.us = "Check for updates on startup?"
 install_location.us = "Install Location"
 install_location.de = "Installationsort"
 install_location.es = "Ubicación de instalación"
@@ -684,7 +685,8 @@ quality.de = "Graphikqualität"
 quality.es = "Calidad gráfica"
 quality.fr = "Qualité graphique"
 quality.it = "Qualità grafica"
-updates.us = "Updates"
+options.us = "Options"
+dlc.us = "Downloadable Content"
 
 [installer.hint]
 existing.us = "(existing install)"
@@ -697,6 +699,10 @@ space.de = "(~13 GB benötigt)"
 space.es = "(~13 GB requeridos)"
 space.fr = "~(13 Go requis)"
 space.it = "(richiesti ~13 GB)"
+
+[installer.option]
+shortcut.us = "Create a desktop shortcut"
+reset_config.us = "Reset configuration to defaults"
 
 [installer.status]
 not_selected.us = "not selected"
@@ -788,6 +794,7 @@ current.de = "Wird installiert: {}"
 current.es = "Instalando: {}"
 current.fr = "Installation: {}"
 current.it = "Installazione: {}"
+rebuilding_index.us = "Rebuilding index cache"
 
 [installer.done]
 title.us = "Done"
@@ -877,6 +884,10 @@ none.de = "keine"
 none.es = "ninguno"
 none.fr = "Aucun"
 none.it = "nessuno"
+name.us = "Name"
+remove.us = "Remove"
+enabled.us = "Enabled"
+removed.us = "Removed {}"
 results.us = "Results"
 results.de = "Ergebnisse"
 results.es = "Resultados"
@@ -892,3 +903,30 @@ install_failed.de = "{}: Installation fehlgeschlagen (bereits installiert, oder 
 install_failed.es = "{}: instalación fallida (ya instalado o paquete dañado)."
 install_failed.fr = "{}: échec de l'installation (déjà installé, ou mauvais fichier)"
 install_failed.it = "{}: installazione non riuscita (già installato o pacchetto danneggiato)."
+
+[update]
+title.us = "Update Available"
+body.us = "re:Blue v{} is available ({}). Download it now?"
+accept.us = "Download"
+decline.us = "Not Now"
+downloading.us = "Downloading update..."
+staged.us = "re:Blue v{} is ready. Restarting to finish the update."
+close.us = "Close"
+
+[update.status]
+checking.us = "Checking for updates..."
+content.us = "Checking for content packs..."
+downloading.us = "Downloading {} ({}/{})..."
+
+[update.error]
+download_failed.us = "Download failed. Your install was not changed."
+hash_mismatch.us = "The download did not match its expected hash and may be corrupt. Your install was not changed."
+apply_failed.us = "The update could not be applied. Your install was not changed."
+
+[upgrade]
+title.us = "Upgrade Install"
+body.us = "The install at {} is version {}. Upgrade it to {}?"
+body_unknown.us = "The install at {} was written by an older build. Upgrade it to {}?"
+notice.us = "Game files, saves and settings are left alone."
+accept.us = "Upgrade"
+decline.us = "Not Now"

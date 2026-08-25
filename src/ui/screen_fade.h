@@ -24,7 +24,7 @@ namespace bd::ui {
 
 // A black veil over the whole output, swept between clear and opaque on wall
 // time. The overlay advances it on the present thread, so it moves smoothly
-// whatever the guest tick is doing, and the guest-side driver polls IsOpaque
+// whatever the guest tick is doing, and the driver in the guest polls IsOpaque
 // and IsClear to sequence what happens under it. The lock keeps level, target
 // and rate moving together: a present-thread step that read a new target
 // against a stale level would draw a frame of the wrong screen, which an
@@ -34,7 +34,7 @@ public:
   static ScreenFade &Get();
 
   // Sweeps toward 'target' (0 clear, 1 opaque) over 'seconds' of full travel.
-  // A zero or negative 'seconds' lands it on this call.
+  // A zero or negative 'seconds' finishes it on this call.
   void FadeTo(f32 target, f32 seconds);
   bool IsOpaque() const;
   bool IsClear() const;
@@ -49,7 +49,6 @@ private:
   f32 rate_ = 0.0f;
 };
 
-// Own via the concrete type: ImGuiDialog's destructor is not virtual.
 class FadeOverlay final : public rex::ui::ImGuiDialog {
 public:
   explicit FadeOverlay(rex::ui::ImGuiDrawer *drawer);

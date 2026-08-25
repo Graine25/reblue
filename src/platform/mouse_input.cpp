@@ -6,6 +6,8 @@
 
 #include <rex/ui/window.h>
 
+#include "engine/engine.h"
+
 namespace bd::platform {
 namespace {
 
@@ -101,6 +103,8 @@ void MouseInput::OnMouseMove(rex::ui::MouseEvent &e) {
 }
 
 void MouseInput::OnMouseWheel(rex::ui::MouseEvent &e) {
+  if (engine::HostOverlayOwnsPointer())
+    return;
   const int detents =
       e.scroll_y() / int(rex::ui::MouseEvent::kScrollPerDetent);
   if (detents != 0)
@@ -109,6 +113,13 @@ void MouseInput::OnMouseWheel(rex::ui::MouseEvent &e) {
 
 void MouseInput::OnMouseDown(rex::ui::MouseEvent &e) {
   ApplyGameCursorState();
+  // Above MnkInputDriver and below the ImGui drawer: the dialog has already
+  // had this click, and the guest must not read it as a pad press too. The
+  // release still goes through, or MnK would hold the button down forever.
+  if (engine::HostOverlayOwnsPointer()) {
+    e.set_handled(true);
+    return;
+  }
   buttons_.fetch_or(1u << u32(e.button()), std::memory_order_relaxed);
 }
 

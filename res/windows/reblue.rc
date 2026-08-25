@@ -35,7 +35,7 @@ BEGIN
       VALUE "CompanyName",      "zolaware"
       VALUE "FileDescription",  "re:Blue"
       VALUE "FileVersion",      REBLUE_VER_STRING
-#ifdef REBLUE_D3D12
+#if defined(REBLUE_D3D12)
       VALUE "InternalName",     "reblue"
       VALUE "OriginalFilename", "reblue.exe"
 #else

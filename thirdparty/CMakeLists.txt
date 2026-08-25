@@ -36,6 +36,7 @@ endif()
 target_include_directories(reblue_thirdparty PUBLIC
     implot
     miniz
+    picosha2
     stb
     zstd
     XenosRecomp/thirdparty/smol-v/source)

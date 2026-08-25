@@ -1,5 +1,5 @@
 # Stages the shipping file list into one zip. Both runtimes come out of the
-# same build dir, so reblue.exe and reblue_vk.exe ship together.
+# same build dir, so reblue.exe (D3D12) and reblue_vk.exe ship together.
 #
 # In: PRESET, OUT_FILE
 $ErrorActionPreference = 'Stop'
@@ -8,16 +8,16 @@ $buildDir = "out/build/$env:PRESET"
 $staging = Join-Path ([System.IO.Path]::GetTempPath()) "reblue-pkg"
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
-# The exes' own dependencies plus the Agility loader's D3D12\ copy, which is
-# the only one plume's D3D12SDKPath ever reads. The debug layer, import libs
-# and CMake junk stay out.
-$files = @(
-    'reblue.exe', 'reblue.pdb',
-    'reblue_vk.exe', 'reblue_vk.pdb',
-    'rexruntime.dll', 'dxcompiler.dll', 'dxil.dll',
-    'D3D12\D3D12Core.dll',
-    'gamecontrollerdb.txt'
-)
+# Written by CMake alongside the header the self-installer compiles in, so the
+# shipped-file list has one owner. It sits outside the build's own output dir
+# because it is not one of the files it names.
+$listPath = Join-Path $buildDir 'packaging/program_files.txt'
+if (-not (Test-Path $listPath)) { throw "missing $listPath - configure the build first" }
+$files = @(Get-Content $listPath | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+
+# Symbols ship so a playtester's crash log symbolizes.
+$files += @($files | Where-Object { $_ -like '*.exe' } |
+    ForEach-Object { [IO.Path]::ChangeExtension($_, '.pdb') })
 
 foreach ($rel in $files) {
     $src = Join-Path $buildDir $rel

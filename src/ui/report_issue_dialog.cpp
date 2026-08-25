@@ -9,7 +9,6 @@
  */
 #include "ui/report_issue_dialog.h"
 
-#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <format>
@@ -194,26 +193,13 @@ std::filesystem::path WriteReport(const ReportContext &ctx,
 
 } // namespace
 
-namespace {
-// Read from the guest thread, written from the UI thread that owns the dialog.
-std::atomic<int> g_openDialogs{0};
-} // namespace
-
-bool ReportIssueDialog::AnyOpen() {
-  return g_openDialogs.load(std::memory_order_relaxed) > 0;
-}
-
 ReportIssueDialog::ReportIssueDialog(rex::ui::ImGuiDrawer *drawer,
                                      ReportContext ctx,
                                      std::function<void()> on_closed)
     : rex::ui::ImGuiDialog(drawer), ctx_(std::move(ctx)),
-      on_closed_(std::move(on_closed)) {
-  g_openDialogs.fetch_add(1, std::memory_order_relaxed);
-}
+      on_closed_(std::move(on_closed)) {}
 
-ReportIssueDialog::~ReportIssueDialog() {
-  g_openDialogs.fetch_sub(1, std::memory_order_relaxed);
-}
+ReportIssueDialog::~ReportIssueDialog() = default;
 
 void ReportIssueDialog::RequestClose() { Close(); }
 

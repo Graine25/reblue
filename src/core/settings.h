@@ -70,7 +70,9 @@ public:
   i32 ShutdownTimeoutMs() const { return shutdownTimeoutMs_; }
   bool SetShutdownTimeoutMs(i32 v);
 
-  // Off by default: nothing reaches the network until a person asks for it.
+  // The one startup network setting: it covers the release check and the
+  // content packs the manifest names, since a player who declines one has
+  // declined the other.
   bool UpdateCheck() const { return updateCheck_; }
   bool SetUpdateCheck(bool v);
 
@@ -111,7 +113,7 @@ private:
   bool perfCSV_ = false;
   bool profiler_ = false;
   i32 shutdownTimeoutMs_ = 1500;
-  bool updateCheck_ = false;
+  bool updateCheck_ = true;
   std::string updateUrl_;
   std::string savesPath_;
   std::string cachePath_;

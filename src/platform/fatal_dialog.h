@@ -11,6 +11,10 @@
 
 #include <string_view>
 
+namespace rex::ui {
+class Window;
+}
+
 namespace bd::platform {
 
 // Blocking. Needs no presenter or window, so it is safe before
@@ -18,5 +22,12 @@ namespace bd::platform {
 // and via SDL elsewhere, where it degrades to log-only if no dialog backend is
 // reachable.
 void ShowFatalError(std::string_view title, std::string_view body);
+
+// Like ShowFatalError, with an extra button. True if the user picked it
+// rather than quitting. 'parent' pins the dialog above that window if one is
+// already open, null if none exists yet.
+bool ShowFatalErrorWithAction(std::string_view title, std::string_view body,
+                              std::string_view action,
+                              rex::ui::Window *parent);
 
 } // namespace bd::platform

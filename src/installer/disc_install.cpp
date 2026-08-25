@@ -11,7 +11,6 @@
 #include <rex/filesystem/devices/disc_image_entry.h>
 #include <rex/filesystem/entry.h>
 #include <rex/memory/mapped_memory.h>
-#include <rex/runtime.h>
 
 #include <array>
 #include <cctype>
@@ -21,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/app_root.h"
 #include "core/logging.h"
 #include "embedded.h"
 #include "vfs/vfs.h"
@@ -417,8 +417,8 @@ Installer::RunAsync(const std::array<fs::path, kDiscCount> &iso_paths,
     }
 
     progress.SetCurrentFile("pack index");
-    if (auto *runtime = rex::Runtime::instance())
-      vfs::VFS::BuildPackIndex(game_data_dest, runtime->cache_root());
+    vfs::VFS::BuildPackIndex(game_data_dest,
+                             bd::CacheRootFor(game_data_dest.parent_path()));
 
     if (repair) {
       BD_INFO("Repair complete: {} files already present, {} missing on discs.",

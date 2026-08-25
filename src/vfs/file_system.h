@@ -130,6 +130,7 @@ private:
 // engine cannot reach.
 inline constexpr int kPriorityGenerated = 300;
 inline constexpr int kPriorityMod = 200;
+inline constexpr int kPriorityContent = 150;
 inline constexpr int kPriorityDLC = 100;
 inline constexpr int kPriorityEngine = 50;
 inline constexpr int kPriorityShippedPack = 25;

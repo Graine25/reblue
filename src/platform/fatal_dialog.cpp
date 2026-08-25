@@ -10,6 +10,10 @@
 #include "core/encoding.h"
 #include "core/logging.h"
 
+#include <SDL3/SDL.h>
+
+#include <string>
+
 #if defined(_WIN32)
 #include "core/windows_lean.h"
 
@@ -46,10 +50,6 @@ void ShowFatalError(std::string_view title, std::string_view body) {
 
 #elif defined(__APPLE__)
 
-#include <SDL3/SDL.h>
-
-#include <string>
-
 namespace bd::platform {
 
 void ShowFatalError(std::string_view title, std::string_view body) {
@@ -67,10 +67,6 @@ void ShowFatalError(std::string_view title, std::string_view body) {
 } // namespace bd::platform
 
 #else
-
-#include <SDL3/SDL.h>
-
-#include <string>
 
 namespace bd::platform {
 
@@ -100,3 +96,83 @@ void ShowFatalError(std::string_view title, std::string_view body) {
 } // namespace bd::platform
 
 #endif
+
+namespace bd::platform {
+namespace {
+
+constexpr int kDeclineButtonId = 0;
+constexpr int kAcceptButtonId = 1;
+
+bool ShowChoice(std::string_view title, std::string_view body,
+                std::string_view accept, std::string_view decline,
+                SDL_MessageBoxFlags flags, rex::ui::Window *parent) {
+#if defined(__APPLE__)
+  if (!SDL_IsMainThread()) {
+    BD_WARN("dialog suppressed (not on the main thread, AppKit alerts "
+            "are main-thread only)");
+    return false;
+  }
+#endif
+
+#if !defined(_WIN32) && !defined(__APPLE__)
+  const bool owned = !SDL_WasInit(SDL_INIT_VIDEO);
+  if (owned && !SDL_InitSubSystem(SDL_INIT_VIDEO)) {
+    BD_WARN("no usable dialog backend ({})", SDL_GetError());
+    return false;
+  }
+  if (const char *driver = SDL_GetCurrentVideoDriver())
+    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, driver);
+#endif
+
+  // The SDK exposes no way to convert an rex::ui::Window to its SDL_Window,
+  // so a non-null parent means "fetch the SDK's single SDL window", the same
+  // way native_window.cpp resolves it off Windows.
+  SDL_Window *sdl_parent = nullptr;
+  if (parent) {
+    int count = 0;
+    SDL_Window **windows = SDL_GetWindows(&count);
+    sdl_parent = (windows && count > 0) ? windows[0] : nullptr;
+    SDL_free(windows);
+  }
+
+  const std::string t(title);
+  const std::string b(body);
+  const std::string yes(accept);
+  const std::string no(decline);
+
+  const SDL_MessageBoxButtonData buttons[] = {
+      {0, kAcceptButtonId, yes.c_str()},
+      {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT |
+           SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT,
+       kDeclineButtonId, no.c_str()},
+  };
+  const SDL_MessageBoxData data{
+      flags,   sdl_parent, t.c_str(), b.c_str(),
+      2,       buttons,    nullptr,
+  };
+
+  int button_id = kDeclineButtonId;
+  const bool shown = SDL_ShowMessageBox(&data, &button_id);
+
+#if !defined(_WIN32) && !defined(__APPLE__)
+  if (owned)
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+#endif
+
+  if (!shown) {
+    BD_WARN("dialog failed to show ({})", SDL_GetError());
+    return false;
+  }
+  return button_id == kAcceptButtonId;
+}
+
+} // namespace
+
+bool ShowFatalErrorWithAction(std::string_view title, std::string_view body,
+                              std::string_view action,
+                              rex::ui::Window *parent) {
+  BD_ERROR("Fatal: {} - {}", title, body);
+  return ShowChoice(title, body, action, "Quit", SDL_MESSAGEBOX_ERROR, parent);
+}
+
+} // namespace bd::platform

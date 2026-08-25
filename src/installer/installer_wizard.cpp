@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <functional>
 
+#include "core/app_root.h"
 #include "core/encoding.h"
 #include "core/i18n.h"
 #include "core/logging.h"
@@ -75,6 +76,9 @@ InstallerWizard::InstallerWizard(
   if (existing) {
     iso_fingerprints_ = existing->iso_fingerprints;
   }
+
+  if (repair_)
+    InitDLCCatalog();
 }
 
 InstallerWizard::~InstallerWizard() {
@@ -82,6 +86,8 @@ InstallerWizard::~InstallerWizard() {
     progress_.canceled.store(true);
     install_thread_.join();
   }
+  if (index_rebuild_thread_.joinable())
+    index_rebuild_thread_.join();
 }
 
 void InstallerWizard::Finish(bool completed) {
@@ -201,6 +207,19 @@ void InstallerWizard::StartInstall() {
   }
 }
 
+void InstallerWizard::StartIndexRebuild() {
+  const auto game_root = std::filesystem::absolute(install_dir_) / "game";
+  const auto cache_root = bd::CacheRootFor(game_root.parent_path());
+
+  index_rebuild_done_.store(false);
+  page_ = Page::RebuildingIndex;
+  index_rebuild_thread_ =
+      std::thread([game_root, cache_root, &done = index_rebuild_done_]() {
+        bd::vfs::VFS::RebuildPackIndex(game_root, cache_root);
+        done.store(true);
+      });
+}
+
 void InstallerWizard::OnDraw(ImGuiIO &) {
   if (!background_texture_ && !background_tried_ && immediate_drawer_) {
     background_tried_ = true;
@@ -262,6 +281,9 @@ void InstallerWizard::OnDraw(ImGuiIO &) {
       case Page::Installing:
         DrawInstalling();
         break;
+      case Page::RebuildingIndex:
+        DrawRebuildingIndex();
+        break;
       case Page::Done:
         DrawDone();
         break;
@@ -291,6 +313,24 @@ void DrawTitle(const char *text) {
 void SectionHeader(const char *text) {
   ImGui::TextUnformatted(text);
   ImGui::Separator();
+}
+
+void CenterInColumn(float item_width) {
+  const float offset = (ImGui::GetContentRegionAvail().x - item_width) * 0.5f;
+  if (offset > 0.0f)
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
+}
+
+void DrawSpinner() {
+  constexpr float kRadius = 9.0f;
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  const ImVec2 center(pos.x + kRadius, pos.y + kRadius);
+  const float t = static_cast<float>(ImGui::GetTime());
+  auto *draw_list = ImGui::GetWindowDrawList();
+  draw_list->PathArcTo(center, kRadius, t * 6.0f, t * 6.0f + 4.0f, 20);
+  draw_list->PathStroke(ImGui::GetColorU32(bd::ui::Theme::kAccentSelected), 0,
+                        3.0f);
+  ImGui::Dummy(ImVec2(kRadius * 2.0f, kRadius * 2.0f));
 }
 
 // Read-only row: each of the ten language codes lights green when present in
@@ -394,6 +434,14 @@ void InstallerWizard::DrawSelectInputs() {
     ImGui::EndTable();
   }
 
+  if (repair_) {
+    ImGui::Spacing();
+    ImGui::BeginDisabled(!InputsReady());
+    if (ImGui::Button(T("installer.button.repair"), ImVec2(120, 0)))
+      StartInstall();
+    ImGui::EndDisabled();
+  }
+
   ImGui::Dummy(ImVec2(0, 8));
   SectionHeader(T("installer.section.languages"));
   std::set<std::string> detected;
@@ -407,11 +455,16 @@ void InstallerWizard::DrawSelectInputs() {
                T(repair_ ? "installer.hint.existing" : "installer.hint.space"),
                install_dir_, "install_dir", [this]() { PickInstallDir(); });
 
-  ImGui::Dummy(ImVec2(0, 12));
-  DrawQualityPreset();
+  if (repair_) {
+    ImGui::Dummy(ImVec2(0, 12));
+    DrawDLCSection();
+  } else {
+    ImGui::Dummy(ImVec2(0, 12));
+    DrawQualityPreset();
+  }
 
   ImGui::Dummy(ImVec2(0, 12));
-  DrawUpdateCheck();
+  DrawOptions();
 
   ImGui::Spacing();
   ImGui::Separator();
@@ -423,22 +476,18 @@ void InstallerWizard::DrawSelectInputs() {
     ImGui::Spacing();
   }
 
-  ImGui::BeginDisabled(!InputsReady());
-  if (ImGui::Button(
-          T(repair_ ? "installer.button.repair" : "installer.button.install"),
-          ImVec2(120, 0)))
-    StartInstall();
-  ImGui::EndDisabled();
-  ImGui::SameLine();
   if (repair_) {
-    if (ImGui::Button(T("installer.button.add_dlc"), ImVec2(120, 0)))
-      EnterAddDLC();
-    ImGui::SameLine();
-    // Existing install: finish and boot without re-selecting discs.
+    // Existing install: rebuild the pack index and boot without re-selecting
+    // discs.
     if (ImGui::Button(T("installer.button.done"), ImVec2(120, 0)))
-      Finish(true);
-    ImGui::SameLine();
+      StartIndexRebuild();
+  } else {
+    ImGui::BeginDisabled(!InputsReady());
+    if (ImGui::Button(T("installer.button.install"), ImVec2(120, 0)))
+      StartInstall();
+    ImGui::EndDisabled();
   }
+  ImGui::SameLine();
   if (ImGui::Button(T("installer.button.cancel"), ImVec2(120, 0)))
     Finish(false);
 }
@@ -471,23 +520,116 @@ void InstallerWizard::DrawQualityPreset() {
   }
 }
 
+void InstallerWizard::DrawDLCSection() {
+  SectionHeader(T("installer.section.dlc"));
+
+  auto &dlc = bd::vfs::VFS::Get().DLC();
+  const size_t count = dlc.Count();
+  if (count == 0) {
+    ImGui::TextDisabled("%s", T("installer.dlc.none"));
+  } else {
+    const char *enabled_label = T("installer.dlc.enabled");
+    const char *remove_label = T("installer.dlc.remove");
+    const float remove_width = ImGui::CalcTextSize(remove_label).x +
+                               ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float remove_column_width = std::max(90.0f, remove_width + 20.0f);
+
+    const ImGuiTableFlags flags =
+        ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoBordersInBody;
+    if (ImGui::BeginTable("##dlc", 3, flags)) {
+      ImGui::TableSetupColumn("##name", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("##enabled", ImGuiTableColumnFlags_WidthFixed,
+                              80.0f);
+      ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed,
+                              remove_column_width);
+
+      // TableHeadersRow() draws each column's label at the cursor it starts
+      // with and cannot be pre-offset, so the row is built by hand to center
+      // the fixed columns' labels over their cells.
+      ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TableHeader(T("installer.dlc.name"));
+      ImGui::TableSetColumnIndex(1);
+      CenterInColumn(ImGui::CalcTextSize(enabled_label).x);
+      ImGui::TableHeader(enabled_label);
+      ImGui::TableSetColumnIndex(2);
+      ImGui::TableHeader("");
+
+      for (size_t i = 0; i < count; ++i) {
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(dlc.At(i).display_name.c_str());
+
+        ImGui::TableSetColumnIndex(1);
+        bool enabled = dlc.IsEnabled(i);
+        CenterInColumn(ImGui::GetFrameHeight());
+        if (ImGui::Checkbox("##enabled", &enabled))
+          dlc.SetEnabled(i, enabled);
+
+        ImGui::TableSetColumnIndex(2);
+        CenterInColumn(remove_width);
+        if (ImGui::Button(remove_label, ImVec2(remove_width, 0))) {
+          const std::string name = dlc.At(i).display_name;
+          dlc.Remove(i);
+          dlc.Reload();
+          dlc_results_.push_back(
+              {true, i18n::Fmt("installer.dlc.removed", name)});
+          ImGui::PopID();
+          break;
+        }
+
+        ImGui::PopID();
+      }
+      ImGui::EndTable();
+    }
+  }
+
+  ImGui::Spacing();
+  if (ImGui::Button(T("installer.dlc.add_file"), ImVec2(160, 0)))
+    PickAndInstallDLC();
+
+  if (!dlc_results_.empty()) {
+    ImGui::Spacing();
+    for (const auto &r : dlc_results_) {
+      const ImVec4 col = r.ok ? ImVec4(0.30f, 0.90f, 0.30f, 1.0f)
+                              : ImVec4(0.90f, 0.40f, 0.30f, 1.0f);
+      ImGui::TextColored(col, "%s", r.message.c_str());
+    }
+  }
+}
+
 // The URL sits under the checkbox so a person turning this on can see where
 // the build is about to call.
-void InstallerWizard::DrawUpdateCheck() {
-  SectionHeader(T("installer.section.updates"));
+void InstallerWizard::DrawOptions() {
+  SectionHeader(T("installer.section.options"));
 
   if (ImGui::Checkbox(T("installer.update_check"), &update_check_)) {
     choices_.update_check = update_check_;
     bd::Settings::Get().SetUpdateCheck(update_check_);
   }
 
-  if (g_path_font)
-    ImGui::PushFont(g_path_font);
-  ImGui::Indent(12.0f);
-  ImGui::TextDisabled("%s", bd::Settings::Get().UpdateUrl().c_str());
-  ImGui::Unindent(12.0f);
-  if (g_path_font)
-    ImGui::PopFont();
+  // A build with no endpoint compiled in has nothing to show, and an empty
+  // TextDisabled still takes a line and its spacing.
+  if (const std::string &url = bd::Settings::Get().UpdateUrl(); !url.empty()) {
+    if (g_path_font)
+      ImGui::PushFont(g_path_font);
+    ImGui::Indent(12.0f);
+    ImGui::TextDisabled("%s", url.c_str());
+    ImGui::Unindent(12.0f);
+    if (g_path_font)
+      ImGui::PopFont();
+  }
+
+#if defined(_WIN32)
+  if (ImGui::Checkbox(T("installer.option.shortcut"), &create_shortcut_))
+    choices_.create_shortcut = create_shortcut_;
+#endif
+  if (repair_) {
+    if (ImGui::Checkbox(T("installer.option.reset_config"), &reset_config_))
+      choices_.reset_config = reset_config_;
+  }
 }
 
 void InstallerWizard::DrawInstalling() {
@@ -545,6 +687,18 @@ void InstallerWizard::DrawInstalling() {
   }
 }
 
+void InstallerWizard::DrawRebuildingIndex() {
+  DrawTitle(T("installer.progress.rebuilding_index"));
+  ImGui::Spacing();
+  DrawSpinner();
+
+  if (index_rebuild_done_.load()) {
+    if (index_rebuild_thread_.joinable())
+      index_rebuild_thread_.join();
+    Finish(true);
+  }
+}
+
 void InstallerWizard::DrawDone() {
   DrawTitle(
       T(done_success_ ? "installer.done.title" : "installer.done.stopped"));
@@ -555,7 +709,7 @@ void InstallerWizard::DrawDone() {
     if (ImGui::Button(T("installer.button.continue"), ImVec2(120, 0)))
       Finish(true);
     ImGui::SameLine();
-    if (ImGui::Button("Add DLC", ImVec2(120, 0)))
+    if (ImGui::Button(T("installer.button.add_dlc"), ImVec2(120, 0)))
       EnterAddDLC();
   } else {
     if (ImGui::Button(T("installer.button.quit"), ImVec2(120, 0)))
@@ -563,9 +717,7 @@ void InstallerWizard::DrawDone() {
   }
 }
 
-void InstallerWizard::EnterAddDLC() {
-  dlc_return_page_ = page_;
-  dlc_results_.clear();
+void InstallerWizard::InitDLCCatalog() {
   // Only <install>/dlc is needed here, so this derives it locally instead of
   // reaching for VFS::Get().Init(): that call also opens the access log and
   // prunes the user's detail_*.csv files, which at wizard time would run
@@ -576,6 +728,12 @@ void InstallerWizard::EnterAddDLC() {
   auto &dlc = bd::vfs::VFS::Get().DLC();
   dlc.Init(dlc_root_);
   dlc.Reload();
+}
+
+void InstallerWizard::EnterAddDLC() {
+  dlc_return_page_ = page_;
+  dlc_results_.clear();
+  InitDLCCatalog();
   page_ = Page::AddDLC;
 }
 

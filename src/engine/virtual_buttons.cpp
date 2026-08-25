@@ -15,7 +15,6 @@
 #include "engine/d2anime/anime_mouse.h"
 #include "platform/platform.h"
 #include "reblue_init.h"
-#include "ui/ui.h"
 
 REX_EXTERN(__imp__bdInputCheckButton);
 
@@ -45,6 +44,7 @@ bool g_arrowPrevDown[kMenuArrowCount] = {};
 
 std::atomic<bool> g_menuOwnsInput{false};
 std::atomic<bool> g_padSawInput{false};
+std::atomic<int> g_hostPointerClaims{0};
 
 // Both written and read on the guest thread: queued during a task update,
 // activated at the next frame's SampleButtonEdges.
@@ -122,7 +122,17 @@ bool SynthesizedButtonHeld(Button btn) {
   return false;
 }
 
-bool HostOverlayOwnsPointer() { return ui::ReportIssueDialog::AnyOpen(); }
+bool HostOverlayOwnsPointer() {
+  return g_hostPointerClaims.load(std::memory_order_relaxed) > 0;
+}
+
+HostPointerClaim::HostPointerClaim() {
+  g_hostPointerClaims.fetch_add(1, std::memory_order_relaxed);
+}
+
+HostPointerClaim::~HostPointerClaim() {
+  g_hostPointerClaims.fetch_sub(1, std::memory_order_relaxed);
+}
 
 // The SDK owns the other half: it takes the cvar and this gate together before
 // it captures the cursor or feeds the stick, and drains its delta every frame

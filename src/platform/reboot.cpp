@@ -7,6 +7,7 @@
  */
 #include "platform/reboot.h"
 #include "core/app_root.h"
+#include "core/encoding.h"
 #include "core/logging.h"
 
 #include <atomic>
@@ -24,6 +25,8 @@
 #include "core/windows_lean.h"
 #else
 #include <cerrno>
+#include <fcntl.h>
+#include <sys/file.h>
 #include <unistd.h>
 #include <vector>
 #endif
@@ -37,6 +40,28 @@ std::atomic<bool> g_requested{false};
 std::string g_active_profile;
 std::filesystem::path g_config_path;
 
+#if defined(_WIN32)
+constexpr wchar_t kInstanceLockName[] = L"Local\\reblue-single-instance";
+HANDLE g_instance_lock = nullptr;
+#else
+constexpr char kInstanceLockFile[] = "reblue.lock";
+int g_instance_lock = -1;
+#endif
+
+void ReleaseInstanceLock() {
+#if defined(_WIN32)
+  if (!g_instance_lock)
+    return;
+  ::CloseHandle(g_instance_lock);
+  g_instance_lock = nullptr;
+#else
+  if (g_instance_lock < 0)
+    return;
+  ::close(g_instance_lock);
+  g_instance_lock = -1;
+#endif
+}
+
 // /proc/self/exe inside an AppImage is the inner binary in a FUSE mount that
 // dies with this process, so relaunching must use the AppImage file itself.
 std::filesystem::path ExecutablePath() {
@@ -48,13 +73,32 @@ std::filesystem::path ExecutablePath() {
   return rex::filesystem::GetExecutablePath();
 }
 
-#if defined(_WIN32)
-bool SpawnFreshInstance(const std::filesystem::path &exe) {
-  std::wstring cmdline = L"\"" + exe.wstring() + L"\"";
-  if (!g_active_profile.empty()) {
-    std::wstring wprofile(g_active_profile.begin(), g_active_profile.end());
-    cmdline += L" --profile \"" + wprofile + L"\"";
+bool DetectSteamGameMode() {
+  // gamescope-session, the session Game Mode runs, stamps itself here.
+  if (auto desktop = rex::platform::env::get("XDG_CURRENT_DESKTOP")) {
+    std::string lowered = *desktop;
+    for (char &c : lowered)
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (lowered.find("gamescope") != std::string::npos)
+      return true;
   }
+  // Exported by gamescope to everything it launches. Desktop Mode does not set
+  // it unless the user asked for a gamescope wrapper, where exiting instead of
+  // relaunching is a harmless degradation.
+  if (auto display = rex::platform::env::get("GAMESCOPE_WAYLAND_DISPLAY");
+      display && !display->empty())
+    return true;
+  return false;
+}
+
+#if defined(_WIN32)
+bool SpawnProcess(const std::filesystem::path &exe, bool repair) {
+  std::wstring cmdline = L"\"" + exe.wstring() + L"\"";
+  if (!g_active_profile.empty())
+    cmdline +=
+        L" --profile \"" + bd::Utf8ToWide(g_active_profile) + L"\"";
+  if (repair)
+    cmdline += L" --repair";
   std::wstring workdir = exe.parent_path().wstring();
 
   STARTUPINFOW si{};
@@ -66,20 +110,24 @@ bool SpawnFreshInstance(const std::filesystem::path &exe) {
     BD_ERROR("[reboot] CreateProcessW failed (err {})", ::GetLastError());
     return false;
   }
+  // Without this the replacement opens behind whatever the user switched to
+  // while this process was quitting: Windows denies SetForegroundWindow to a
+  // process that never held it.
+  ::AllowSetForegroundWindow(pi.dwProcessId);
   ::CloseHandle(pi.hThread);
   ::CloseHandle(pi.hProcess);
   return true;
 }
 #else
-bool SpawnFreshInstance(const std::filesystem::path &exe) {
-  // Mirror the Win32 branch: relaunch with only --profile. The fresh instance
-  // re-resolves the install root from the install store.
+bool SpawnProcess(const std::filesystem::path &exe, bool repair) {
   std::vector<std::string> args;
   args.push_back(exe.string());
   if (!g_active_profile.empty()) {
     args.push_back("--profile");
     args.push_back(g_active_profile);
   }
+  if (repair)
+    args.push_back("--repair");
   std::vector<char *> argv;
   argv.reserve(args.size() + 1);
   for (auto &a : args)
@@ -102,25 +150,49 @@ bool SpawnFreshInstance(const std::filesystem::path &exe) {
 }
 #endif
 
-bool DetectSteamGameMode() {
-  // gamescope-session, the session Game Mode runs, stamps itself here.
-  if (auto desktop = rex::platform::env::get("XDG_CURRENT_DESKTOP")) {
-    std::string lowered = *desktop;
-    for (char &c : lowered)
-      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (lowered.find("gamescope") != std::string::npos)
-      return true;
-  }
-  // Exported by gamescope to everything it launches. Desktop Mode does not set
-  // it unless the user asked for a gamescope wrapper, where exiting instead of
-  // relaunching is a harmless degradation.
-  if (auto display = rex::platform::env::get("GAMESCOPE_WAYLAND_DISPLAY");
-      display && !display->empty())
+} // namespace
+
+bool AcquireInstanceLock() {
+#if defined(_WIN32)
+  HANDLE h = ::CreateMutexW(nullptr, FALSE, kInstanceLockName);
+  if (!h) {
+    BD_WARN("[reboot] instance lock unavailable (err {})", ::GetLastError());
     return true;
-  return false;
+  }
+  if (::GetLastError() == ERROR_ALREADY_EXISTS) {
+    ::CloseHandle(h);
+    return false;
+  }
+  g_instance_lock = h;
+  return true;
+#else
+  std::string dir = "/tmp";
+  if (auto runtime = rex::platform::env::get("XDG_RUNTIME_DIR");
+      runtime && !runtime->empty())
+    dir = *runtime;
+  const std::string path = dir + "/" + kInstanceLockFile;
+
+  const int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+  if (fd < 0) {
+    BD_WARN("[reboot] instance lock {} unavailable (errno {})", path, errno);
+    return true;
+  }
+  if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+    ::close(fd);
+    return false;
+  }
+  g_instance_lock = fd;
+  return true;
+#endif
 }
 
-} // namespace
+bool SpawnReplacement(const std::filesystem::path &exe, bool repair) {
+  ReleaseInstanceLock();
+  if (SpawnProcess(exe, repair))
+    return true;
+  AcquireInstanceLock();
+  return false;
+}
 
 bool IsSteamGameMode() {
   static const bool game_mode = DetectSteamGameMode();
@@ -163,6 +235,10 @@ void RequestWarmReboot() {
   handler();
 }
 
+bool RelaunchSelf(bool repair) {
+  return SpawnReplacement(ExecutablePath(), repair);
+}
+
 [[noreturn]] void PerformWarmReboot(const std::function<void()> &quiesce) {
   auto exe = ExecutablePath();
 
@@ -186,7 +262,7 @@ void RequestWarmReboot() {
 
   // 4. Spawn after the drain: if it fails there is nothing left to render with,
   //    so this is a hard failure rather than the old stay-in-session fallback.
-  if (!SpawnFreshInstance(exe)) {
+  if (!SpawnReplacement(exe, false)) {
     BD_ERROR("[reboot] relaunch failed after teardown, exiting");
     rex::FlushLogging();
     std::_Exit(1);

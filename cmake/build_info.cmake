@@ -59,9 +59,21 @@ function(reblue_write_build_info out_header)
     set(REBLUE_BUILD_COMPILER "${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
     string(TIMESTAMP REBLUE_BUILD_TIMESTAMP "%Y%m%d_%H%M")
 
+    # Empty unless the build supplies one, which leaves the check off for
+    # local builds and keeps the endpoint out of the source tree.
+    if(NOT DEFINED REBLUE_UPDATE_URL)
+        set(REBLUE_UPDATE_URL "")
+    endif()
+
+    # Nightlies append a run counter so consecutive ones compare as newer.
+    # Every other build reports the plain project version.
+    if(NOT DEFINED REBLUE_VERSION_SUFFIX)
+        set(REBLUE_VERSION_SUFFIX "")
+    endif()
+
     configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/build_info.h.in" "${out_header}" @ONLY)
 
-    message(STATUS "reblue v${reblue_VERSION} ${REBLUE_GIT_COMMIT} on "
+    message(STATUS "reblue v${reblue_VERSION}${REBLUE_VERSION_SUFFIX} ${REBLUE_GIT_COMMIT} on "
                    "${REBLUE_GIT_BRANCH} (dirty=${REBLUE_GIT_DIRTY}) "
                    "${REBLUE_BUILD_PLATFORM}")
 endfunction()

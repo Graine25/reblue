@@ -1,8 +1,11 @@
 name: Release
 
-# Push a v* tag and it builds every platform, then publishes the tag as a
+# Push a v* tag and it builds Windows and Linux, then publishes the tag as a
 # release. A tag with a suffix (v0.5.0-rc1) publishes as a prerelease.
-# workflow_dispatch builds the same five jobs without publishing.
+# workflow_dispatch builds the same jobs without publishing.
+#
+# macOS is off, here and in the nightly. _build-macos.yml stays put: turning it
+# back on is this job block and one entry in publish's needs.
 
 on:
   push:
@@ -59,6 +62,7 @@ jobs:
     with:
       sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
       asset_base: ${{ needs.resolve.outputs.asset_base }}
+      update_channel: ${{ needs.verify.outputs.prerelease == 'true' && 'nightly' || 'stable' }}
     secrets: inherit
 
   linux:
@@ -67,18 +71,11 @@ jobs:
     with:
       sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
       asset_base: ${{ needs.resolve.outputs.asset_base }}
-    secrets: inherit
-
-  macos:
-    needs: [resolve, verify]
-    uses: ./.github/workflows/_build-macos.yml
-    with:
-      sdk_tag: ${{ needs.resolve.outputs.sdk_tag }}
-      asset_base: ${{ needs.resolve.outputs.asset_base }}
+      update_channel: ${{ needs.verify.outputs.prerelease == 'true' && 'nightly' || 'stable' }}
     secrets: inherit
 
   publish:
-    needs: [resolve, verify, windows, linux, macos]
+    needs: [resolve, verify, windows, linux]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -111,3 +108,23 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate manifest
+        run: |
+          python3 tools/gen_manifest.py \
+            "${{ needs.resolve.outputs.version }}" \
+            artifacts \
+            "${{ vars.UPDATE_BASE_URL }}/app/v${{ needs.resolve.outputs.version }}" \
+            "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" \
+            artifacts/manifest.toml \
+            --content-url "${{ vars.UPDATE_BASE_URL }}/manifest/content.toml"
+
+      - name: Publish to R2
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: bash .github/scripts/publish-r2.sh

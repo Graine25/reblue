@@ -389,6 +389,16 @@ constexpr SettingRow kGameplaySettings[] = {
      .options = kPadGlyphSet,
      .count = OptCount(kPadGlyphSet),
      .sliderUi = true},
+    {.label = "settings.gameplay.update_check.label",
+     .group = "menu.header.advanced",
+     .binding = {.get =
+                     [] { return Settings::Get().UpdateCheck() ? 1.0 : 0.0; },
+                 .set =
+                     [](double v) {
+                       return Settings::Get().SetUpdateCheck(v != 0.0);
+                     }},
+     .options = kOnOff,
+     .count = OptCount(kOnOff)},
     {.label = "settings.gameplay.developer_mode.label",
      .group = "menu.header.advanced",
      .binding = {
@@ -736,7 +746,7 @@ constexpr SettingRow kControlsSettings[] = {
 // order interleaves its sections column-wise: even indices walk the Actions
 // column, odd indices the Movement & Camera column. The tail is the Controller
 // Compatibility band, back and the stick presses down the left column and the
-// D-pad down the right. The grid slots the indices land on, including the
+// D-pad down the right. The grid slots the indices map to, including the
 // cells that carry no bind, are kKeybindSlotBind in config_layout.h.
 constexpr SettingRow kKeybindSettings[] = {
     {.label = "settings.keybind.a.label",

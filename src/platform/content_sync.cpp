@@ -1,0 +1,156 @@
+/**
+ * @file    platform/content_sync.cpp
+ * @copyright Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
+ *            All rights reserved.
+ * @license   BSD 3-Clause License
+ *            See LICENSE file in the project root for full license text.
+ */
+#include "platform/content_sync.h"
+
+#include <filesystem>
+#include <fstream>
+#include <string_view>
+#include <thread>
+#include <vector>
+
+#include "core/build_info.h"
+#include "core/logging.h"
+#include "platform/manifest.h"
+#include "platform/package.h"
+#include "vfs/vfs.h"
+
+namespace bd::platform {
+namespace {
+
+// A pack id names a directory, so it may not reach outside the one it is
+// given. Anything else is a malformed manifest, not a pack.
+bool IsUsableId(std::string_view id) {
+  if (id.empty() || id.size() > 64)
+    return false;
+  for (char c : id) {
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '-' || c == '_';
+    if (!ok)
+      return false;
+  }
+  return true;
+}
+
+// The version stamp ContentCatalog reads back to decide what is installed.
+bool WritePackFile(const std::filesystem::path &dir,
+                   const ContentEntry &entry) {
+  std::ofstream out(dir / "content.toml", std::ios::binary);
+  out << "[content]\nid = \"" << entry.id << "\"\nversion = " << entry.version
+      << "\n";
+  out.close();
+  return static_cast<bool>(out);
+}
+
+} // namespace
+
+ContentSync &ContentSync::Get() {
+  static ContentSync s;
+  return s;
+}
+
+ContentSync::Stage ContentSync::State() const { return stage_.load(); }
+
+std::string ContentSync::Current() const {
+  std::lock_guard lock(mutex_);
+  return current_;
+}
+
+size_t ContentSync::Done() const { return done_.load(); }
+size_t ContentSync::Total() const { return total_.load(); }
+
+void ContentSync::Start(const std::string &url) {
+  if (url.empty())
+    return;
+  if (started_.exchange(true))
+    return;
+
+  // Detached: the ordered exit kills the process outright, so a fetch still
+  // waiting on the network never holds shutdown up.
+  std::thread([this, url] { Run(url); }).detach();
+}
+
+void ContentSync::Run(const std::string &url) {
+  stage_.store(Stage::kChecking);
+
+  std::string error;
+  auto manifest = ContentManifest::Fetch(url, error);
+  if (!manifest) {
+    BD_WARN("[content] manifest fetch from {} failed: {}", url, error);
+    stage_.store(Stage::kDone);
+    return;
+  }
+  BD_INFO("[content] manifest names {} pack(s)", manifest->packs.size());
+
+  auto &catalog = bd::vfs::VFS::Get().Content();
+
+  std::vector<const ContentEntry *> wanted;
+  for (const auto &entry : manifest->packs) {
+    if (!IsUsableId(entry.id)) {
+      BD_WARN("[content] manifest names an unusable pack id, skipping it");
+      continue;
+    }
+    if (!entry.min_app.empty() &&
+        Version::Compare(entry.min_app, REBLUE_VERSION_STRING) > 0) {
+      BD_INFO("[content] '{}' needs v{}, skipping", entry.id, entry.min_app);
+      continue;
+    }
+    if (catalog.InstalledVersion(entry.id) >= entry.version)
+      continue;
+    wanted.push_back(&entry);
+  }
+
+  if (wanted.empty()) {
+    BD_INFO("[content] every pack the manifest names is installed");
+    stage_.store(Stage::kDone);
+    return;
+  }
+
+  total_.store(wanted.size());
+  stage_.store(Stage::kFetching);
+  BD_INFO("[content] fetching {} pack(s)", wanted.size());
+
+  std::vector<std::string> fetched;
+  for (size_t i = 0; i < wanted.size(); ++i) {
+    const ContentEntry &entry = *wanted[i];
+    done_.store(i);
+    {
+      std::lock_guard lock(mutex_);
+      current_ = entry.id;
+    }
+
+    const auto zip = catalog.DownloadPathFor(entry.id, entry.version);
+    const auto staged = catalog.StagingDirFor(entry.id);
+    if (Package::Fetch(entry.url, entry.sha256, zip, staged, nullptr) !=
+        Package::Result::kOk)
+      continue;
+
+    std::error_code ec;
+    if (!WritePackFile(staged, entry)) {
+      BD_ERROR("[content] could not stamp '{}' with its version", entry.id);
+      std::filesystem::remove_all(staged, ec);
+      continue;
+    }
+    std::filesystem::remove(zip, ec);
+    fetched.push_back(entry.id);
+    BD_INFO("[content] fetched '{}' v{}", entry.id, entry.version);
+  }
+
+  done_.store(wanted.size());
+  {
+    std::lock_guard lock(mutex_);
+    current_.clear();
+  }
+
+  // One commit for the batch: it unmounts, swaps every pack in, then re-scans
+  // and re-mounts once.
+  if (!fetched.empty())
+    catalog.Commit(fetched);
+  stage_.store(Stage::kDone);
+}
+
+} // namespace bd::platform

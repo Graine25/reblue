@@ -39,6 +39,19 @@ void SetWarmRebootHandler(std::function<void()> handler);
 // twice. Invokes the registered host handler, which relaunches the process.
 void RequestWarmReboot();
 
+// False if another copy is already running.
+bool AcquireInstanceLock();
+
+// Spawns exe in place of this process, forwarding the active profile and
+// --repair if requested. True if it launched. The caller quits either way.
+// Releases the instance lock first, so the replacement can take it before this
+// process is gone.
+bool SpawnReplacement(const std::filesystem::path &exe, bool repair);
+
+// Spawns a fresh instance of this process, with --repair if requested. True
+// if it launched. The caller quits either way.
+bool RelaunchSelf(bool repair);
+
 // Persist cvars, quiesce the guest and renderer, spawn a fresh instance, flush
 // logs, exit this one. UI thread only, never returns. The quiesce runs first so
 // the replacement never overlaps this process on the GPU, which does mean a

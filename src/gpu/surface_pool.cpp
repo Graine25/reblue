@@ -45,12 +45,15 @@ constexpr size_t kCountCap = 1024;
 // cheaper is parked.
 constexpr u64 kLargeSurfaceBytes = 16ull * 1024 * 1024;
 
-// Auto budget = VRAM >> kAutoBudgetShift, clamped. The ceiling has to clear a
-// 4x-SSAA 4K working set (~3.1 GiB), or a 16 GiB card computes 4 GiB and then
-// throws the headroom away at the clamp.
+// Auto budget = VRAM * kAutoBudgetNum / kAutoBudgetDen, clamped. Returns land
+// a frame or two behind the acquire that replaces them, so a key needs two
+// copies parked to hit. At 4x SSAA and 4K one copy of the scene pair plus the
+// shadow map is ~2.5 GiB, so a quarter of a 16 GiB card parks one and
+// recreates the other every frame. Three eighths clears two.
 constexpr u64 kAutoBudgetMin = 512ull * 1024 * 1024;
-constexpr u64 kAutoBudgetMax = 6144ull * 1024 * 1024;
-constexpr u32 kAutoBudgetShift = 2;
+constexpr u64 kAutoBudgetMax = 10240ull * 1024 * 1024;
+constexpr u64 kAutoBudgetNum = 3;
+constexpr u64 kAutoBudgetDen = 8;
 // Over budget the pool holds surfaces the frame allocates either way, so VRAM
 // is the real bound.
 constexpr u32 kHardCeilingShift = 1;
@@ -157,8 +160,8 @@ u64 ByteBudget(Pool &p) {
   const u64 vram = VramBytes(p);
   if (!vram)
     return kAutoBudgetMin; // UMA, or the device is not up yet
-  p.auto_budget_bytes =
-      std::clamp(vram >> kAutoBudgetShift, kAutoBudgetMin, kAutoBudgetMax);
+  p.auto_budget_bytes = std::clamp(vram / kAutoBudgetDen * kAutoBudgetNum,
+                                   kAutoBudgetMin, kAutoBudgetMax);
   BD_INFO("[surface-pool] auto budget {} MiB from {} MiB VRAM ({})",
           p.auto_budget_bytes / 1048576, vram / 1048576,
           Video::GetDeviceName());

@@ -138,7 +138,7 @@ jobs:
             artifacts \
             "${{ vars.UPDATE_BASE_URL }}/app/v${{ needs.resolve.outputs.version }}.${{ github.run_number }}" \
             "https://github.com/${{ github.repository }}/releases/tag/${{ needs.resolve.outputs.tag_name }}" \
-            artifacts/manifest.toml \
+            manifest.toml \
             --content-url "${{ vars.UPDATE_BASE_URL }}/manifest/content.toml"
 
       - name: Publish to R2

@@ -52,14 +52,6 @@ jobs:
           ref: ${{ inputs.ref }}
           submodules: recursive
 
-      - name: Checkout game assets
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ env.ASSETS_REPO }}
-          token: ${{ secrets.ASSETS_TOKEN }}
-          path: assets
-          lfs: true
-
       - name: Install LLVM, CMake, Ninja
         run: choco install llvm cmake ninja -y
 
@@ -79,7 +71,8 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./.github/scripts/fetch-sdk.ps1
+          ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
+        run: ./.github/scripts/fetch-deps.ps1
 
       - name: Enter the Visual Studio environment
         shell: pwsh

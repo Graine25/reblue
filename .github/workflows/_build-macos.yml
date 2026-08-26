@@ -68,14 +68,6 @@ jobs:
           ref: ${{ inputs.ref }}
           submodules: recursive
 
-      - name: Checkout game assets
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ env.ASSETS_REPO }}
-          token: ${{ secrets.ASSETS_TOKEN }}
-          path: assets
-          lfs: true
-
       - name: Install Ninja
         run: brew install ninja
 
@@ -93,7 +85,8 @@ jobs:
       - name: Fetch ReXGlue SDK (${{ inputs.sdk_tag }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash .github/scripts/fetch-sdk.sh
+          ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
+        run: bash .github/scripts/fetch-deps.sh
 
       - name: Configure
         run: bash .github/scripts/configure.sh

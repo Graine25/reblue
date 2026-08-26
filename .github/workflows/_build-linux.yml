@@ -67,9 +67,6 @@ jobs:
       MAX_GLIBC: "2.39"
       MAX_GLIBCXX: "3.4.33"
     steps:
-      # Inline because it has to run before the checkout that brings the
-      # scripts in: actions/checkout needs git for submodules and git-lfs for
-      # the assets repo.
       - name: Bootstrap container
         run: |
           apt-get update
@@ -82,14 +79,6 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
-
-      - name: Checkout game assets
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ env.ASSETS_REPO }}
-          token: ${{ secrets.ASSETS_TOKEN }}
-          path: assets
-          lfs: true
 
       - name: Install toolchain
         run: bash .github/scripts/install-linux-toolchain.sh
@@ -105,7 +94,8 @@ jobs:
       - name: Fetch ReXGlue SDK (${{ inputs.sdk_tag }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash .github/scripts/fetch-sdk.sh
+          ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
+        run: bash .github/scripts/fetch-deps.sh
 
       - name: Fetch aarch64 dxc
         if: matrix.arch == 'arm64'

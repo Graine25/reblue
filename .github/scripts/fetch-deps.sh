@@ -3,7 +3,7 @@
 # Uses the plain API rather than gh, which the ubuntu:22.04 container lacks.
 #
 # In: SDK_REPO, SDK_TAG, SDK_SLICE (win-amd64 | linux-amd64 | linux-arm64 |
-#     mac-arm64 | mac-amd64), GH_TOKEN
+#     mac-arm64 | mac-amd64), GH_TOKEN, ASSETS_REPO, ASSETS_TOKEN
 set -euo pipefail
 
 url=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
@@ -24,3 +24,8 @@ if [ ! -d "sdk/${SDK_SLICE}" ]; then
   exit 1
 fi
 echo "Extracted $(basename "${url}") to sdk/${SDK_SLICE}"
+
+git clone --depth 1 \
+  "https://x-access-token:${ASSETS_TOKEN}@github.com/${ASSETS_REPO}.git" assets
+git -C assets remote set-url origin "https://github.com/${ASSETS_REPO}.git"
+echo "Cloned ${ASSETS_REPO} to assets"

@@ -13,6 +13,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <rex/hook.h>
@@ -34,6 +35,7 @@
 #include "engine/settings.h"
 #include "engine/sfx.h"
 #include "engine/state_layout.h"
+#include "gpu/gpu.h"
 
 REX_IMPORT(__imp__AnimeVarBag_FindChildByName, VarBagFindChild, u32(u32, u32));
 
@@ -70,8 +72,10 @@ constexpr float kFrameH = 520.0f;
 constexpr float kMapZ = 10.0f;
 constexpr float kLegendZ = 9.95f; // its own band, so the markers keep theirs
 // The legend column stands at x 905, inside the parchment's right third, so
-// the map is centered left of the frame to clear it.
+// the map is centered left of the frame to clear it. Centering costs the
+// offset on the far side too, which leaves the band the map is fitted into.
 constexpr float kMapCenterOffsetX = 75.0f;
+constexpr float kMapAreaW = kFrameW - 2.0f * kMapCenterOffsetX;
 constexpr u32 kLegendSwatchAlpha = 204;
 
 // L_wrmap.csv hangs its legend column, compass rose, graph paper and tick marks
@@ -81,6 +85,12 @@ constexpr double kLegendHome = -160.0;
 constexpr double kLegendParked = -4000.0;
 
 constexpr const char *kPromptMount = "ui:world-map-prompts";
+
+// The art is fitted, not the texture: a rounded-up MapScale can leave the floor
+// plan covering a twentieth of it, which magnifies to mush.
+constexpr float kMaxMapMagnify = 3.0f;
+// Rim markers can land a texel or two outside the scanned art.
+constexpr float kContentMargin = 0.02f;
 
 constexpr float kZoomSteps[] = {1.0f, 1.5f, 2.25f, 3.5f};
 constexpr int kZoomCount = static_cast<int>(std::size(kZoomSteps));
@@ -198,6 +208,7 @@ private:
   u32 SelectedFloor() const;
   int SelectedIndex() const;
   void ApplyScreenVars(bool areaMap);
+  gpu::TextureContent FloorContent(u32 db, u32 texture);
   void LoadPrompts(u32 screenTask);
   void SyncPrompts(bool available);
   bool StepFloor(int delta);
@@ -214,6 +225,7 @@ private:
   float panU_ = 0.5f;
   float panV_ = 0.5f;
   std::vector<u32> floors_;
+  std::vector<std::pair<u32, gpu::TextureContent>> content_;
   std::vector<HiddenAnime> hidden_;
 
   // Stock values saved on entry, one per layout, since which world map shows
@@ -234,6 +246,14 @@ void AreaMap::CollectFloors() {
   if (!task || static_cast<u32>(task->floor) == 0)
     return;
 
+  // Nothing calls LoadAreaFloors for the world map, so a dungeon's floors
+  // outlive it. The identity triple names the stage they were loaded for.
+  const engine::Stage stage = engine::Field().Stage();
+  if (!stage || static_cast<u32>(task->category) != stage.Category() ||
+      static_cast<u32>(task->areaHi) != stage.Area() ||
+      static_cast<u32>(task->areaLo) != stage.Sub())
+    return;
+
   // MiniMapTask_SelectCurrentFloorDB walks the sub-floor vector and falls back
   // to the inline base map, so the traversal order is the base map first.
   const u32 base = miniMap + offsetof(MiniMapTask_t, baseFloor);
@@ -245,6 +265,22 @@ void AreaMap::CollectFloors() {
     if (FloorReady(db))
       floors_.push_back(db);
   }
+}
+
+// One scan per floor per opening, so a floor measured before its texels landed
+// is measured again the next time.
+gpu::TextureContent AreaMap::FloorContent(u32 db, u32 texture) {
+  for (const auto &entry : content_)
+    if (entry.first == db)
+      return entry.second;
+
+  gpu::TextureContent rect = gpu::TextureContent::Scan(texture);
+  rect.u0 = std::max(0.0f, rect.u0 - kContentMargin);
+  rect.v0 = std::max(0.0f, rect.v0 - kContentMargin);
+  rect.u1 = std::min(1.0f, rect.u1 + kContentMargin);
+  rect.v1 = std::min(1.0f, rect.v1 + kContentMargin);
+  content_.push_back({db, rect});
+  return rect;
 }
 
 u32 AreaMap::SelectedFloor() const {
@@ -366,6 +402,7 @@ void AreaMap::RestoreVanillaAnime() {
 
 void AreaMap::Enter() {
   active_ = true;
+  content_.clear();
   zoom_ = 0;
   floor_ = -1;
   panU_ = panV_ = 0.5f;
@@ -480,6 +517,7 @@ bool AreaMap::Update(u32 screenTask) {
   if (screen_.Rebind(screenTask)) {
     active_ = false;
     floors_.clear();
+    content_.clear();
     hidden_.clear();
     markers_.clear();
     legend_.clear();
@@ -565,32 +603,39 @@ void AreaMap::Draw(u32 screenTask) {
     return;
   const auto *m = mem::try_at<const MiniMapDB_t>(db);
 
-  // The compass spins its crop by the map's own north offset, so the full map
-  // has to carry the same rotation to read as the same map.
-  const float rot = (float(m->texRot) + float(m->offsetRot)) * kDegToRad;
+  PrimSelectTexture(0, db + kFloorTexHolder);
+  const u32 floorTex = mem::load<u32>(PrimState() + kPrim_Texture);
+  const gpu::TextureContent content = FloorContent(db, floorTex);
+
+  // MiniMapTask__DrawWidget turns its crop by TexRot alone, over a world-axis
+  // raster: OffSet.rot turns only the marker offsets drawn on top.
+  const float rot = float(m->texRot) * kDegToRad;
   const float cosA = std::cos(rot);
   const float sinA = std::sin(rot);
   const float absCos = std::fabs(cosA);
   const float absSin = std::fabs(sinA);
 
-  const float texW = m->texW;
-  const float texH = m->texH;
-  const float fit = std::min(kFrameW / (texW * absCos + texH * absSin),
-                             kFrameH / (texW * absSin + texH * absCos));
-  const float halfW = texW * fit * 0.5f;
-  const float halfH = texH * fit * 0.5f;
+  const float artW = float(m->texW) * content.Width();
+  const float artH = float(m->texH) * content.Height();
+  const float fit =
+      std::min({kMapAreaW / (artW * absCos + artH * absSin),
+                kFrameH / (artW * absSin + artH * absCos), kMaxMapMagnify});
+  const float halfW = artW * fit * 0.5f;
+  const float halfH = artH * fit * 0.5f;
   const float centerX = kFrameX + kFrameW * 0.5f - kMapCenterOffsetX;
   const float centerY = kFrameY + kFrameH * 0.5f;
 
   // Zoom shrinks the sampled window rather than the quad, so the map never
-  // spills past the parchment and the UVs never leave the texture.
+  // spills past the parchment and the UVs never leave the art.
   const float half = 0.5f / kZoomSteps[zoom_];
-  const float windowU = std::clamp(panU_, half, 1.0f - half);
-  const float windowV = std::clamp(panV_, half, 1.0f - half);
-  const float u0 = windowU - half;
-  const float u1 = windowU + half;
-  const float v0 = windowV - half;
-  const float v1 = windowV + half;
+  const float panU = std::clamp(panU_, half, 1.0f - half);
+  const float panV = std::clamp(panV_, half, 1.0f - half);
+  const float windowU = content.u0 + panU * content.Width();
+  const float windowV = content.v0 + panV * content.Height();
+  const float u0 = content.u0 + (panU - half) * content.Width();
+  const float u1 = content.u0 + (panU + half) * content.Width();
+  const float v0 = content.v0 + (panV - half) * content.Height();
+  const float v1 = content.v0 + (panV + half) * content.Height();
 
   // Screen space from the map's own, matching XMMatrixRotationY on the row
   // vector bdMatrixRotateAxis hands the compass.
@@ -630,13 +675,10 @@ void AreaMap::Draw(u32 screenTask) {
     return true;
   };
 
-  PrimSelectTexture(0, db + kFloorTexHolder);
-  const u32 prim = PrimState();
-
   const auto band = [&](float x0, float x1, float uLeft, float uRight,
                         u32 colorLeft, u32 colorRight) {
     PrimBegin(kTexturedQuad2D, kMapZ, 0, 0);
-    PrimSetTexture(0, mem::load<u32>(prim + kPrim_Texture));
+    PrimSetTexture(0, floorTex);
     corner(x0, -halfH, uLeft, v0, colorLeft);
     corner(x0, halfH, uLeft, v1, colorLeft);
     corner(x1, halfH, uRight, v1, colorRight);
@@ -691,8 +733,9 @@ void AreaMap::Draw(u32 screenTask) {
   if (!toScreen(player[0], player[2], &markerX, &markerY))
     return;
 
-  const float heading = (float(m->texRot) + float(m->plyRot)) * kDegToRad +
-                        field.Rotation()[1] - kHalfPi;
+  // PlyRot defaults to OffSet.rot, which the map is not turned by.
+  const float heading =
+      float(m->texRot) * kDegToRad + field.Rotation()[1] - kHalfPi;
   PrimSelectTexture(kChromeArrow, miniMap + offsetof(MiniMapTask_t, chromeTex));
   PrimDrawRectRotated(markerX, markerY, kPlayerZ, kMarkerSize, kMarkerSize,
                       heading, 0, 0, 0, 0, 0, 0, kOpaqueWhite);

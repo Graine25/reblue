@@ -113,6 +113,18 @@ u32 FetchDepth(const xe::xe_gpu_texture_fetch_t &f) {
   return f.dimension == xe::DataDimension::k3D ? f.size_3d.depth + 1u : 1u;
 }
 
+bool ReadFetch(u32 guest_va, xe::xe_gpu_texture_fetch_t &fetch) {
+  const auto *d3dtex = bd::mem::try_at<const D3DTexture>(guest_va);
+  if (!d3dtex)
+    return false;
+  u32 fc[6];
+  for (int i = 0; i < 6; ++i) {
+    fc[i] = u32(d3dtex->Format.dword[i]);
+  }
+  std::memcpy(&fetch, fc, sizeof(fetch));
+  return true;
+}
+
 MirrorLayout MakeLayout(const xe::xe_gpu_texture_fetch_t &fetch) {
   MirrorLayout L;
   L.format = fetch.format;
@@ -398,18 +410,11 @@ GuestTexture *GetOrCreateNativeMirror(u32 guest_va, u32 name_va) {
     g_native_mirrors.erase(it);
   }
 
-  const auto *d3dtex = bd::mem::at<const D3DTexture>(guest_va);
-  if (!d3dtex) {
+  xe::xe_gpu_texture_fetch_t fetch;
+  if (!ReadFetch(guest_va, fetch)) {
     BD_WARN("native texture: guest VA 0x{:08X} does not translate", guest_va);
     return nullptr;
   }
-
-  u32 fc[6];
-  for (int i = 0; i < 6; ++i) {
-    fc[i] = u32(d3dtex->Format.dword[i]);
-  }
-  xe::xe_gpu_texture_fetch_t fetch;
-  std::memcpy(&fetch, fc, sizeof(fetch));
 
   const bool dxt = (fetch.format == xe::TextureFormat::k_DXT1 ||
                     fetch.format == xe::TextureFormat::k_DXT2_3 ||
@@ -473,6 +478,67 @@ GuestTexture *GetOrCreateNativeMirror(u32 guest_va, u32 name_va) {
                                   ++g_native_name_seq};
   }
   return raw;
+}
+
+TextureContent TextureContent::Scan(u32 guest_va) {
+  const TextureContent whole;
+  xe::xe_gpu_texture_fetch_t fetch;
+  if (!ReadFetch(guest_va, fetch) ||
+      fetch.type != xe::FetchConstantType::kTexture ||
+      fetch.dimension != xe::DataDimension::k2DOrStacked ||
+      !rg::FormatInfo::Get(fetch.format))
+    return whole;
+
+  const MirrorLayout L = MakeLayout(fetch);
+  if (!L.width || !L.height || !L.bytes_per_block || !L.texels_per_edge)
+    return whole;
+
+  const u32 base = fetch.base_address << 12;
+  const u32 blocks =
+      fetch.tiled ? L.aligned_w * L.aligned_h : L.block_w * L.block_h;
+  const auto *src = bd::mem::try_at<const u8>(base);
+  // Both ends, since try_at validates an address and not a range.
+  if (!src || !bd::mem::try_at<const u8>(base + blocks * L.bytes_per_block - 1))
+    return whole;
+
+  const auto block_at = [&](u32 bx, u32 by) -> const u8 * {
+    if (!fetch.tiled)
+      return src + (size_t(by) * L.block_w + bx) * L.bytes_per_block;
+    const i32 offset =
+        tu::GetTiledOffset2D(i32(bx), i32(by), L.aligned_w, L.bpb_log2);
+    return offset < 0 ? nullptr : src + size_t(offset);
+  };
+
+  const u8 *field = block_at(0, 0);
+  if (!field)
+    return whole;
+
+  u32 min_x = L.block_w;
+  u32 min_y = L.block_h;
+  u32 max_x = 0;
+  u32 max_y = 0;
+  for (u32 by = 0; by < L.block_h; ++by) {
+    for (u32 bx = 0; bx < L.block_w; ++bx) {
+      const u8 *block = block_at(bx, by);
+      if (!block || std::memcmp(block, field, L.bytes_per_block) == 0)
+        continue;
+      min_x = std::min(min_x, bx);
+      max_x = std::max(max_x, bx);
+      min_y = std::min(min_y, by);
+      max_y = std::max(max_y, by);
+    }
+  }
+  if (min_x > max_x || min_y > max_y)
+    return whole;
+
+  TextureContent out;
+  out.u0 = float(min_x * L.texels_per_edge) / float(L.width);
+  out.v0 = float(min_y * L.texels_per_edge) / float(L.height);
+  out.u1 =
+      std::min(1.0f, float((max_x + 1) * L.texels_per_edge) / float(L.width));
+  out.v1 =
+      std::min(1.0f, float((max_y + 1) * L.texels_per_edge) / float(L.height));
+  return out;
 }
 
 GuestTexture *ResolveGuestTexture(u32 guest_va) {

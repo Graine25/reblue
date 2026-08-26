@@ -32,10 +32,11 @@ namespace {
 // The compass widget, as MiniMapTask__DrawWidget lays it out: a 256-wide
 // masked crop centered at 1120,588 with the player pinned to its center. A
 // marker's screen offset is its world delta over MapScale, times TexSize over
-// DispSize, times the 128 half-width, turned by texRot plus OffSetRot, which
-// is the exact transform the widget's own destination marker takes. That
-// marker also hides past 70 widget pixels, fading over the last tenth, and
-// ours keep its numbers so nothing pops at a different rim.
+// DispSize, times the 128 half-width, turned by texRot, as the widget turns the
+// crop. Its own destination marker adds OffSetRot on top, which the world-axis
+// raster under the crop does not carry. That marker hides past 70 widget
+// pixels, fading over the last tenth, and ours keep its numbers so nothing
+// pops at a different rim.
 constexpr float kCompassX = 1120.0f;
 constexpr float kCompassY = 588.0f;
 constexpr float kCompassHalf = 128.0f;
@@ -106,7 +107,7 @@ void MiniMapMarkers::Draw(u32 miniMap) {
     return;
   const Vec3 player = field.Position();
 
-  const float rot = (float(m->texRot) + float(m->offsetRot)) * kDegToRad;
+  const float rot = float(m->texRot) * kDegToRad;
   const float cosA = std::cos(rot);
   const float sinA = std::sin(rot);
   const float spanX =

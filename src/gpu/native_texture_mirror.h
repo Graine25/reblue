@@ -58,6 +58,22 @@ std::vector<NativeTextureRef> NativeTexturesByName(std::string_view name);
 // size underneath the engine.
 bool NativeTextureReplace(u32 guest_va, const u8 *blob, size_t size);
 
+// Mip 0's uv sub-rect outside the flat field its corner block carries, for the
+// views that fit a whole guest texture into a frame.
+struct TextureContent {
+  float u0 = 0.0f;
+  float v0 = 0.0f;
+  float u1 = 1.0f;
+  float v1 = 1.0f;
+
+  float Width() const { return u1 - u0; }
+  float Height() const { return v1 - v0; }
+
+  // Whole blocks compared against the corner block, since a flat field encodes
+  // to the same bytes everywhere. The whole texture back when nothing differs.
+  static TextureContent Scan(u32 guest_va);
+};
+
 // Free mirrors evicted while frame slot 'slot' was recording. Drained
 // post-fence so the descriptor write + free cannot race an in-flight command
 // list.

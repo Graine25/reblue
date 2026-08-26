@@ -1,6 +1,6 @@
 /**
  * @file    platform/fatal_dialog.h
- * @brief   Blocking modal fatal-error dialog usable before presentation setup.
+ * @brief   Blocking modal dialogs usable before presentation setup.
  *
  * @copyright Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
  *            All rights reserved.
@@ -22,6 +22,8 @@ namespace bd::platform {
 // and via SDL elsewhere, where it degrades to log-only if no dialog backend is
 // reachable.
 void ShowFatalError(std::string_view title, std::string_view body);
+
+void ShowWarning(std::string_view title, std::string_view body);
 
 // Like ShowFatalError, with an extra button. True if the user picked it
 // rather than quitting. 'parent' pins the dialog above that window if one is

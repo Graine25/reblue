@@ -34,52 +34,51 @@ BOOL CALLBACK MinimizeOwnTopLevelWindow(HWND hwnd, LPARAM) {
   return TRUE;
 }
 
-} // namespace
-
-void ShowFatalError(std::string_view title, std::string_view body) {
-  BD_ERROR("Fatal: {} - {}", title, body);
-  // Drop the (possibly fullscreen) game window, then show the dialog topmost
-  // and in the foreground so it is always visible and grabs focus.
+void ShowModal(std::string_view title, std::string_view body, bool warning) {
   EnumWindows(MinimizeOwnTopLevelWindow, 0);
   MessageBoxW(nullptr, bd::Utf8ToWide(body).c_str(),
               bd::Utf8ToWide(title).c_str(),
-              MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
+              MB_OK | (warning ? MB_ICONWARNING : MB_ICONERROR) | MB_TOPMOST |
+                  MB_SETFOREGROUND);
 }
 
+} // namespace
 } // namespace bd::platform
 
 #elif defined(__APPLE__)
 
 namespace bd::platform {
+namespace {
 
-void ShowFatalError(std::string_view title, std::string_view body) {
-  BD_ERROR("Fatal: {} - {}", title, body);
+void ShowModal(std::string_view title, std::string_view body, bool warning) {
   if (!SDL_IsMainThread()) {
-    BD_WARN("fatal dialog suppressed (not on the main thread, AppKit alerts "
-            "are main-thread only) - see the logged error above");
+    BD_WARN("dialog suppressed (not on the main thread, AppKit alerts "
+            "are main-thread only) - see the logged message above");
     return;
   }
   const std::string t(title);
   const std::string b(body);
-  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, t.c_str(), b.c_str(), nullptr);
+  SDL_ShowSimpleMessageBox(warning ? SDL_MESSAGEBOX_WARNING
+                                   : SDL_MESSAGEBOX_ERROR,
+                           t.c_str(), b.c_str(), nullptr);
 }
 
+} // namespace
 } // namespace bd::platform
 
 #else
 
 namespace bd::platform {
+namespace {
 
-void ShowFatalError(std::string_view title, std::string_view body) {
-  BD_ERROR("Fatal: {} - {}", title, body);
-
+void ShowModal(std::string_view title, std::string_view body, bool warning) {
   // SDL walks its bootstrap list for a message box, and the X11 entry stores
   // through controls.window ahead of the null check meant to guard it
   // (SDL_x11messagebox.c), so a display it cannot open SIGSEGVs and eats the
   // error being reported. Pinning the driver keeps the walk off the others.
   const bool owned = !SDL_WasInit(SDL_INIT_VIDEO);
   if (owned && !SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-    BD_WARN("no usable dialog backend ({}), the error above is log-only",
+    BD_WARN("no usable dialog backend ({}), the message above is log-only",
             SDL_GetError());
     return;
   }
@@ -88,11 +87,15 @@ void ShowFatalError(std::string_view title, std::string_view body) {
 
   const std::string t(title);
   const std::string b(body);
-  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, t.c_str(), b.c_str(), nullptr);
+  SDL_ShowSimpleMessageBox(warning ? SDL_MESSAGEBOX_WARNING
+                                   : SDL_MESSAGEBOX_ERROR,
+                           t.c_str(), b.c_str(), nullptr);
 
   if (owned)
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
+
+} // namespace
 } // namespace bd::platform
 
 #endif
@@ -167,6 +170,16 @@ bool ShowChoice(std::string_view title, std::string_view body,
 }
 
 } // namespace
+
+void ShowFatalError(std::string_view title, std::string_view body) {
+  BD_ERROR("Fatal: {} - {}", title, body);
+  ShowModal(title, body, false);
+}
+
+void ShowWarning(std::string_view title, std::string_view body) {
+  BD_WARN("{} - {}", title, body);
+  ShowModal(title, body, true);
+}
 
 bool ShowFatalErrorWithAction(std::string_view title, std::string_view body,
                               std::string_view action,

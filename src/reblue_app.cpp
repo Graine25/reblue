@@ -20,6 +20,7 @@
 #include <implot.h>
 
 #include <rex/cvar.h>
+#include <rex/dbg.h>
 #include <rex/filesystem.h>
 #include <rex/input/device_assignment.h>
 #include <rex/input/input_system.h>
@@ -517,10 +518,17 @@ void ReblueApp::OnConfigurePaths(rex::PathConfig &paths) {
   bd::platform::SetProfileContext(active_profile_, profile_cfg);
 
   const auto program_dir = ProgramDir();
-  if (program_dir != install_root_)
-    BD_WARN("Running from {} rather than the install at {}: a staged update "
-            "will not be installed",
-            program_dir.string(), install_root_.string());
+  if (program_dir != install_root_) {
+    const auto warning =
+        fmt::format("Warning: re:Blue is running outside of its install "
+                    "directory. Please run the exe from {}",
+                    install_root_.string());
+    // Debugging a build-dir exe is intended, so it never costs a dialog.
+    if (rex::debug::IsDebuggerAttached())
+      BD_WARN("{}", warning);
+    else
+      bd::platform::ShowWarning("re:Blue", warning);
+  }
 
 #if defined(_WIN32)
   // A build-dir exe run against this install is not part of it, so swapping

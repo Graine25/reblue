@@ -22,6 +22,7 @@
 #include "engine/state_layout.h"
 #include "reblue_init.h"
 
+REX_EXTERN(__imp__bdFieldEncounterMenuOpen);
 REX_EXTERN(__imp__bdFieldEncounterMenuUpdate);
 
 namespace bd::engine {
@@ -38,13 +39,15 @@ static_assert(sizeof(FieldEncounterItem_t) == 0x0C);
 // bdFieldEncounterMenuHandleList reads the pad itself and
 // bdFieldEncounterMenuDraw lays the rows out from these fields alone.
 struct FieldEncounterMenu_t {
-  /* 0x000 */ u8 _pad000[0xDC];
+  /* 0x000 */ u8 _pad000[0x74];
+  /* 0x074 */ be_u32 rows; // first row, nearest enemy first
+  /* 0x078 */ u8 _pad078[0x64];
   /* 0x0DC */ be_u32 cursor;    // enemyRows on the fight row, itemRows on use
   /* 0x0E0 */ be_u32 holdAnchor; // 999 while no hold-to-jump is armed
   /* 0x0E4 */ be_u32 spinFrame;
   /* 0x0E8 */ be_u32 enemyRows;
   /* 0x0EC */ be_u32 selected;
-  /* 0x0F0 */ be_u32 openDelay;
+  /* 0x0F0 */ be_u32 startDelay;
   /* 0x0F4 */ be_u32 state; // 0 enemy list, 1 field skills, 2 item list
   /* 0x0F8 */ be_u32 skillSlot;
   /* 0x0FC */ be_u32 itemRows;
@@ -59,10 +62,33 @@ struct FieldEncounterMenu_t {
   /* 0x264 */ be_f32 slide; // 0 on the enemy list, 1 with a submenu up
   /* 0x268 */ be_f32 slideStep;
 };
+static_assert(offsetof(FieldEncounterMenu_t, rows) == 0x074);
 static_assert(offsetof(FieldEncounterMenu_t, cursor) == 0x0DC);
 static_assert(offsetof(FieldEncounterMenu_t, state) == 0x0F4);
 static_assert(offsetof(FieldEncounterMenu_t, items) == 0x118);
 static_assert(offsetof(FieldEncounterMenu_t, slide) == 0x264);
+
+// The fight begins with every row reading kSelected or kSelectedCursor.
+enum class RowState : u32 {
+  kCleared = 0,
+  kCursor = 1,
+  kSelected = 3,
+  kSelectedCursor = 4,
+  kIdle = 5,
+};
+
+// One enemy in the list bdFieldEncounterMenuBuildRows sorts by distance.
+struct FieldEncounterRow_t {
+  /* 0x000 */ u8 _pad000[0xF4];
+  /* 0x0F4 */ be_u32 next;
+  /* 0x0F8 */ u8 _pad0F8[0x14];
+  /* 0x10C */ be_u32 state;
+  /* 0x110 */ u8 _pad110[0x0C];
+  /* 0x11C */ be_u32 selected;
+};
+static_assert(offsetof(FieldEncounterRow_t, next) == 0x0F4);
+static_assert(offsetof(FieldEncounterRow_t, state) == 0x10C);
+static_assert(offsetof(FieldEncounterRow_t, selected) == 0x11C);
 
 // bdFieldEncounterMenuCursorPos's layout: a row's highlight bar is 34 tall
 // starting 6 above its text line, text lines run 36 apart, and the whole
@@ -217,6 +243,29 @@ void DriveEncounterMouse(u32 menuVA) {
   MoveCursor(*m, hit);
 }
 
+// Every enemy starts in the fight. The engine opens with none selected, which
+// the fight row already treats as all of them, so this changes what the panel
+// shows and what a deselect starts from.
+void SelectAllRows(u32 menuVA) {
+  auto *m = mem::try_at<FieldEncounterMenu_t>(menuVA);
+  if (!m)
+    return;
+
+  const u32 rows = m->enemyRows;
+  u32 selected = 0;
+  for (u32 rowVA = m->rows; selected < rows && rowVA;) {
+    auto *row = mem::try_at<FieldEncounterRow_t>(rowVA);
+    if (!row)
+      break;
+    row->selected = 1;
+    row->state = u32(selected == 0 ? RowState::kSelectedCursor
+                                   : RowState::kSelected);
+    rowVA = row->next;
+    ++selected;
+  }
+  m->selected = selected;
+}
+
 } // namespace
 
 } // namespace bd::engine
@@ -228,4 +277,12 @@ void DriveEncounterMouse(u32 menuVA) {
 REX_HOOK_RAW(bdFieldEncounterMenuUpdate) {
   bd::engine::DriveEncounterMouse(ctx.r3.u32);
   __imp__bdFieldEncounterMenuUpdate(ctx, base);
+}
+
+// The menu's one-shot open. It builds the row list, so there is nothing to
+// select until it has returned.
+REX_HOOK_RAW(bdFieldEncounterMenuOpen) {
+  const u32 menuVA = ctx.r3.u32;
+  __imp__bdFieldEncounterMenuOpen(ctx, base);
+  bd::engine::SelectAllRows(menuVA);
 }

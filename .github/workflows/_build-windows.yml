@@ -108,7 +108,6 @@ jobs:
         shell: pwsh
         env:
           OUT_FILE: ${{ inputs.asset_base }}-win-amd64.zip
-          SYMBOLS_FILE: ${{ inputs.asset_base }}-win-amd64-symbols.zip
         run: ./.github/scripts/package-windows.ps1
 
       - name: Upload

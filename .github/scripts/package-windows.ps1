@@ -4,9 +4,10 @@
 # Symbols go into a second zip. They exist so a crash log symbolizes, and
 # nobody needs them to play.
 #
-# In: PRESET, OUT_FILE, SYMBOLS_FILE
+# In: PRESET, OUT_FILE
 $ErrorActionPreference = 'Stop'
 
+if (-not $env:OUT_FILE) { throw "OUT_FILE not set" }
 $buildDir = "out/build/$env:PRESET"
 
 # Written by CMake alongside the header the self-installer compiles in, so the
@@ -39,4 +40,9 @@ function New-Package($relPaths, $zipPath) {
 }
 
 New-Package $files (Join-Path "dist" $env:OUT_FILE)
-New-Package $symbols (Join-Path "dist/symbols" $env:SYMBOLS_FILE)
+
+# Derived rather than passed in. The nightly runs this script from the built
+# branch against the workflow file on main, so a second input would arrive
+# empty until both sides land.
+$symbolsName = [IO.Path]::GetFileNameWithoutExtension($env:OUT_FILE) + "-symbols.zip"
+New-Package $symbols (Join-Path "dist/symbols" $symbolsName)

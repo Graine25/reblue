@@ -1,0 +1,71 @@
+#pragma once
+
+// Metal counterpart of bd_pe_ps_common.hlsli, maintained independently of it.
+// Only the shared entry-point shape and the handful of constants the two
+// bd_pe_ps_*_clamp shaders actually touch live here; the HLSL version's other
+// 60-odd descriptor-index macros have no MSL consumer.
+//
+// These shaders are substituted for recompiled pixel shaders at link time, so
+// the entry point below must stay identical in shape to the one XenosRecomp's
+// MSL emitter produces: same struct names, same [[user()]] semantics, same
+// heap/push-constant buffer indices, same shaderMain name. If the emitter's
+// entry signature changes, this has to change with it.
+
+#include "thirdparty/XenosRecomp/XenosRecomp/shader_common.h"
+
+// SharedConstants layout, matching the HLSL side's ScreenTexture_* block.
+#define ScreenTexture_Texture2DDescriptorIndex \
+    BUFFER_LOAD_UINT(g_PushConstants.SharedConstants + 0)
+#define ScreenTexture_SamplerDescriptorIndex \
+    BUFFER_LOAD_UINT(g_PushConstants.SharedConstants + 192)
+
+struct Interpolators {
+    float4 iPos [[position]];
+    float4 iTexCoord0 [[user(TEXCOORD0)]];
+    float4 iTexCoord1 [[user(TEXCOORD1)]];
+    float4 iTexCoord2 [[user(TEXCOORD2)]];
+    float4 iTexCoord3 [[user(TEXCOORD3)]];
+    float4 iTexCoord4 [[user(TEXCOORD4)]];
+    float4 iTexCoord5 [[user(TEXCOORD5)]];
+    float4 iTexCoord6 [[user(TEXCOORD6)]];
+    float4 iTexCoord7 [[user(TEXCOORD7)]];
+    float4 iTexCoord8 [[user(TEXCOORD8)]];
+    float4 iTexCoord9 [[user(TEXCOORD9)]];
+    float4 iTexCoord10 [[user(TEXCOORD10)]];
+    float4 iTexCoord11 [[user(TEXCOORD11)]];
+    float4 iTexCoord12 [[user(TEXCOORD12)]];
+    float4 iTexCoord13 [[user(TEXCOORD13)]];
+    float4 iTexCoord14 [[user(TEXCOORD14)]];
+    float4 iTexCoord15 [[user(TEXCOORD15)]];
+    // The emitter marks COLOR centroid for MSAA; in MSL the interpolation
+    // qualifier lives on the fragment stage_in member, not the vertex output.
+    float4 iColor0 [[user(COLOR0), centroid_perspective]];
+    float4 iColor1 [[user(COLOR1), centroid_perspective]];
+};
+
+struct PixelShaderOutput {
+    float4 oC0 [[color(0)]];
+};
+
+// Both shaders read the bindless heaps and push constants; the unused heap
+// bindings are still declared so the layout matches the emitter's.
+#define BD_PE_PS_PARAMS                                                        \
+    Interpolators input [[stage_in]],                                          \
+    bool iFace [[front_facing]],                                               \
+    constant Texture2DDescriptorHeap* g_Texture2DDescriptorHeap [[buffer(0)]], \
+    constant Texture3DDescriptorHeap* g_Texture3DDescriptorHeap [[buffer(1)]], \
+    constant TextureCubeDescriptorHeap* g_TextureCubeDescriptorHeap [[buffer(2)]], \
+    constant SamplerDescriptorHeap* g_SamplerDescriptorHeap [[buffer(3)]],     \
+    constant PushConstants& g_PushConstants [[buffer(8)]]
+
+// Only the Xenos registers these two shaders reach for. The recompiled
+// originals declare r0-r31 plus a0/aL/cubeMapData; everything past r3 is dead
+// in both of these. r0 is seeded from TEXCOORD0, as in the HLSL.
+#define BD_PE_PS_REGISTERS                                                     \
+    float4 r0 = input.iTexCoord0;                                              \
+    float4 r1 = 0.0;                                                           \
+    float4 r2 = 0.0;                                                           \
+    float4 r3 = 0.0;                                                           \
+    float ps = 0.0;                                                            \
+    bool p0 = false;                                                           \
+    PixelShaderOutput shaderOutput{}

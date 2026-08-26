@@ -1,0 +1,25 @@
+#pragma once
+
+#include <metal_stdlib>
+
+using namespace metal;
+
+struct CopyPushConstants {
+    uint resourceDescriptorIndex;
+    uint resourceDescriptorIndex2;
+    float param0;
+    float param1;
+};
+
+struct FullscreenVaryings {
+    float4 position [[position]];
+    float2 texCoord [[user(TEXCOORD0)]];
+};
+
+struct Texture2DDescriptorHeap {
+    texture2d<float> tex;
+};
+
+struct SamplerDescriptorHeap {
+    sampler samp;
+};

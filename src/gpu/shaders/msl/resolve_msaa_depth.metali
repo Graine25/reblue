@@ -1,0 +1,32 @@
+#pragma once
+
+#include "copy_common.metali"
+
+// plume picks the depth plane of a D32_FLOAT_S8_UINT MS texture, which Metal
+// reads through depth2d_ms rather than texture2d_ms; its read() already returns
+// the scalar depth. Mirrors the HLSL's Texture2DMS<float, SAMPLE_COUNT>.
+struct Depth2DMSDescriptorHeap {
+    depth2d_ms<float> tex;
+};
+
+struct DepthOutput {
+    float depth [[depth(any)]];
+};
+
+[[fragment]]
+DepthOutput shaderMain(FullscreenVaryings input [[stage_in]],
+                       constant Depth2DMSDescriptorHeap* textureHeap [[buffer(0)]],
+                       constant CopyPushConstants& push [[buffer(8)]]) {
+    DepthOutput output{};
+    depth2d_ms<float> tex = textureHeap[push.resourceDescriptorIndex].tex;
+    const uint2 dimensions{tex.get_width(), tex.get_height()};
+    const uint2 coord = min(uint2(input.texCoord * float2(dimensions)),
+                            dimensions - uint2(1));
+    // min() across samples = nearest-surface depth, which is what the posteff
+    // DOF/fog sampling this expects. No scale.
+    float result = tex.read(coord, 0);
+    for (uint i = 1; i < SAMPLE_COUNT; ++i)
+        result = min(result, tex.read(coord, i));
+    output.depth = result;
+    return output;
+}

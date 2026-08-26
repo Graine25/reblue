@@ -138,7 +138,9 @@ REXCVAR_DEFINE_INT32(bd_aspect_ratio, 0, kCvarGroup,
 REXCVAR_DEFINE_INT32(bd_fov_offset, 0, kCvarGroup,
                      "Horizontal degrees added to the game's own field of view "
                      "at 16:9, which the menu counts off 45. 0 keeps how the "
-                     "game frames itself.")
+                     "game frames itself. Battle and event scenes hold the "
+                     "game's own value, since their effects are drawn to span "
+                     "it.")
     .range(0, 75);
 
 REXCVAR_DEFINE_BOOL(bd_vsync, true, kCvarGroup, "Vertical sync.");

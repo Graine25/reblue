@@ -20,6 +20,7 @@
 
 #include "core/logging.h"
 #include "core/memory_helpers.h"
+#include "engine/engine.h"
 #include "gpu/d3d.h"
 #include "gpu/device.h"
 #include "gpu/settings.h"
@@ -59,6 +60,14 @@ constexpr u32 kDeviceBackBufferHEA = 0x82DDA674;
 constexpr u32 kDisplayFloatDimsEA = 0x82DDA5E8; // {width, height} f32 pair
 constexpr u32 kViewportWidthEA = 0x82DE8918;
 constexpr u32 kViewportHeightEA = 0x82DE891C;
+
+// An authored sequence sizes its screen-covering effect quads to just span the
+// fov the game frames itself at, so a wider frame leaves them short of the
+// edges. Battle carries the summon and corporeal sequences, which run off the
+// battle action steps rather than an .evt scene.
+bool AuthoredFraming() {
+  return bd::engine::EventScenePlaying() || bd::engine::Battle().IsActive();
+}
 
 } // namespace
 
@@ -113,7 +122,8 @@ void bdOutputResCompositeTexScaleHook(PPCRegister &r3, PPCRegister &r4) {
 // image. The composed ratio holds the vertical view and opens the horizontal,
 // and going narrower holds the horizontal instead rather than crop what the
 // game was framed for. Cameras carrying an aspect keep it. bd_fov_offset
-// applies here too, since scaling the half-angle's tangent changes the term.
+// applies here too, since scaling the half-angle's tangent changes the term,
+// and drops out under AuthoredFraming.
 //
 // BD open-codes this matrix in three places, all hooked here. Patching the
 // register rather than the camera leaves the globals BD reads back for its
@@ -122,7 +132,8 @@ void bdProjectionAspectHook(PPCRegister &fov_half, PPCRegister &aspect) {
   if (std::fabs(aspect.f64 - kDesignCanvasAspect) > kDesignCanvasAspectEpsilon)
     return;
 
-  double tan_scale = bd::gpu::Settings::Get().FOVTanScale();
+  double tan_scale =
+      AuthoredFraming() ? 1.0 : bd::gpu::Settings::Get().FOVTanScale();
   const double target = bd::gpu::Output::ProjectionAspect();
   if (std::fabs(target - kDesignCanvasAspect) > kDesignCanvasAspectEpsilon) {
     aspect.f64 = target;

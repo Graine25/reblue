@@ -54,9 +54,6 @@ constexpr u64 kAutoBudgetMin = 512ull * 1024 * 1024;
 constexpr u64 kAutoBudgetMax = 10240ull * 1024 * 1024;
 constexpr u64 kAutoBudgetNum = 3;
 constexpr u64 kAutoBudgetDen = 8;
-// Over budget the pool holds surfaces the frame allocates either way, so VRAM
-// is the real bound.
-constexpr u32 kHardCeilingShift = 1;
 // A key acquired this recently is live working set: its last parked copy is not
 // spare capacity, since dropping it buys a guaranteed recreate next frame. Well
 // above one frame's churn (~20-35 parks).
@@ -150,14 +147,19 @@ u64 VramBytes(Pool &p) {
   return p.vram_bytes;
 }
 
+// A share of a card whose size is unknown is unanswerable, so UMA and the
+// pre-device calls take the floor rather than a guess at what it may hold.
 u64 ByteBudget(Pool &p) {
-  const i32 mb = Settings::Get().SurfacePoolBudgetMB();
-  if (mb > 0)
-    return u64(mb) * 1024ull * 1024ull;
+  const u64 vram = VramBytes(p);
+  const i32 pct = Settings::Get().SurfacePoolBudgetPercent();
+  if (pct > 0) {
+    if (!vram)
+      return kAutoBudgetMin;
+    return vram / 100 * u64(pct);
+  }
   if (p.auto_budget_bytes)
     return p.auto_budget_bytes;
 
-  const u64 vram = VramBytes(p);
   if (!vram)
     return kAutoBudgetMin; // UMA, or the device is not up yet
   p.auto_budget_bytes = std::clamp(vram / kAutoBudgetDen * kAutoBudgetNum,
@@ -171,7 +173,9 @@ u64 ByteBudget(Pool &p) {
 // Where holding the live working set stops being cheaper than recreating it.
 u64 HardCeiling(Pool &p, u64 budget) {
   const u64 vram = VramBytes(p);
-  return std::max(budget, vram ? vram >> kHardCeilingShift : budget * 2);
+  if (!vram)
+    return budget * 2;
+  return std::max(budget, vram / 100 * u64(kSurfacePoolBudgetCapPercent));
 }
 
 KeyStats &TouchKeyLocked(Pool &p, u64 key, u32 width, u32 height,
@@ -379,7 +383,7 @@ bool ReturnLocked(GuestTexture *surface, std::vector<GuestTexture *> &evicted) {
       BD_WARN("SurfacePool: live working set {:.0f} MiB over the {} MiB "
               "budget, holding it parked (ceiling {} MiB). Lower the AA "
               "factor or shadow resolution, or raise "
-              "bd_surface_pool_budget_mb.",
+              "bd_surface_pool_budget_pct.",
               (p.parked_bytes + ks.bytes) / 1048576.0, budget / 1048576,
               ceiling / 1048576);
     }

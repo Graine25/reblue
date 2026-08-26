@@ -108,7 +108,17 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
+          pattern: reblue-*
           path: artifacts
+          merge-multiple: true
+
+      # Not into artifacts/: that is what the manifest names and what goes to
+      # the CDN. Symbols only attach to the release.
+      - name: Download symbols
+        uses: actions/download-artifact@v8
+        with:
+          pattern: symbols-*
+          path: symbols
           merge-multiple: true
 
       - name: Compose release notes
@@ -119,14 +129,16 @@ jobs:
         run: bash .github/scripts/compose-nightly-notes.sh
 
       - name: Publish prerelease
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.resolve.outputs.tag_name }}
           name: reblue v${{ needs.resolve.outputs.version }}.${{ github.run_number }} dev nightly
           body_path: notes.md
           prerelease: true
           target_commitish: ${{ needs.resolve.outputs.dev_sha }}
-          files: artifacts/*
+          files: |
+            artifacts/*
+            symbols/*
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -108,6 +108,7 @@ jobs:
         shell: pwsh
         env:
           OUT_FILE: ${{ inputs.asset_base }}-win-amd64.zip
+          SYMBOLS_FILE: ${{ inputs.asset_base }}-win-amd64-symbols.zip
         run: ./.github/scripts/package-windows.ps1
 
       - name: Upload
@@ -115,4 +116,12 @@ jobs:
         with:
           name: reblue-win-amd64
           path: dist/*.zip
+          if-no-files-found: error
+
+      # Not reblue-*, so the publish job can download symbols on their own.
+      - name: Upload symbols
+        uses: actions/upload-artifact@v6
+        with:
+          name: symbols-win-amd64
+          path: dist/symbols/*.zip
           if-no-files-found: error

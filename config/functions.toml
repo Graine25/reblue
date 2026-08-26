@@ -1120,6 +1120,7 @@
 0x8239CD50 = { name = "bdWorldMapScreenTaskConstruct" }
 0x8239D3A0 = { name = "WorldMapScreenTask__vf02_Update", size = 0x29C }
 0x8239D640 = { name = "WorldMapScreenTask__vf03", size = 0xEC }
+0x8239E478 = { name = "WorldMapScreen_ApplyReduceLayout" }
 0x8239EA00 = { name = "bdWorldMapInit", size = 0x218 }
 0x8239ED00 = { name = "bdWorldEnvInit", size = 0x4A8 }
 0x8239FCE8 = { name = "bdWorldMapPathBuild", size = 0xD0 }

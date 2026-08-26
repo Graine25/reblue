@@ -39,6 +39,7 @@ REX_IMPORT(__imp__AnimeVarBag_FindChildByName, VarBagFindChild, u32(u32, u32));
 
 REX_EXTERN(__imp__WorldMapScreenTask__vf02_Update);
 REX_EXTERN(__imp__WorldMapScreenTask__vf03);
+REX_EXTERN(__imp__WorldMapScreen_ApplyReduceLayout);
 
 namespace bd::engine {
 
@@ -215,10 +216,11 @@ private:
   std::vector<u32> floors_;
   std::vector<HiddenAnime> hidden_;
 
-  // Stock values saved on entry, one pair per layout, since which of the two
-  // world maps is showing is the screen's own business.
+  // Stock values saved on entry, one per layout, since which world map shows
+  // and whether the screen offers zoom are the screen's own business.
   float worldFlg_[kWmsLayoutCount] = {1.0f, 1.0f};
   float cubeFlg_[kWmsLayoutCount] = {-1.0f, -1.0f};
+  float alphaLBRB_[kWmsLayoutCount] = {255.0f, 255.0f};
 
   D2AnimeTask prompts_;
   bool mounted_ = false;
@@ -311,9 +313,14 @@ void AreaMap::ApplyScreenVars(bool areaMap) {
     const u32 header = VarBagFindChild(bag, headerName);
     if (header)
       VarBagSetFloat(header, "alpha", areaMap ? 0.0 : 255.0);
+    // Cube world has no zoom and its prompt is already dark, so a fixed 255
+    // would light one for a zoom the screen refuses to run.
     const u32 footer = VarBagFindChild(bag, footerName);
-    if (footer)
-      VarBagSetFloat(footer, "alpha_LBRB", areaMap ? 0.0 : 255.0);
+    if (footer) {
+      if (areaMap)
+        VarBagGetFloat(footer, "alpha_LBRB", &alphaLBRB_[i]);
+      VarBagSetFloat(footer, "alpha_LBRB", areaMap ? 0.0 : alphaLBRB_[i]);
+    }
   }
 }
 
@@ -691,6 +698,18 @@ void AreaMap::Draw(u32 screenTask) {
                       heading, 0, 0, 0, 0, 0, 0, kOpaqueWhite);
 }
 
+// ApplyReduceLayout resets the rest of the zoom crossfade but not its alphas.
+// L_wrmap draws the cube-world map on Map1Alpha alone, so a stranded 0 blanks
+// it, while the overworld map, drawn on both alphas, never shows the fault.
+void RestoreMapCrossfade(u32 screenTask) {
+  D2AnimeTask layout(mem::try_field<u32>(screenTask, kWms_Layout));
+  if (!layout)
+    return;
+  const u32 bag = layout.VarBag();
+  VarBagSetFloat(bag, "Map1Alpha", 255.0);
+  VarBagSetFloat(bag, "Map2Alpha", 0.0);
+}
+
 } // namespace
 
 void AreaMapTick() {
@@ -704,7 +723,7 @@ void AreaMapTick() {
 
 } // namespace bd::engine
 
-// Both hooks stay raw: they call guest code on the hook's own stack, which
+// The hooks stay raw: they call guest code on the hook's own stack, which
 // only ctx carries.
 
 REX_HOOK_RAW(WorldMapScreenTask__vf02_Update) {
@@ -718,4 +737,10 @@ REX_HOOK_RAW(WorldMapScreenTask__vf03) {
   const u32 screenTask = ctx.r3.u32;
   __imp__WorldMapScreenTask__vf03(ctx, base);
   bd::engine::AreaMap::Get().Draw(screenTask);
+}
+
+REX_HOOK_RAW(WorldMapScreen_ApplyReduceLayout) {
+  const u32 screenTask = ctx.r3.u32;
+  __imp__WorldMapScreen_ApplyReduceLayout(ctx, base);
+  bd::engine::RestoreMapCrossfade(screenTask);
 }

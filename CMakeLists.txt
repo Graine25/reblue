@@ -4,7 +4,7 @@
 # SDK boilerplate lives in generated/rexglue.cmake.
 
 cmake_minimum_required(VERSION 3.25)
-project(reblue VERSION 0.76.78 LANGUAGES C CXX)
+project(reblue VERSION 0.76.79 LANGUAGES C CXX)
 
 include(CMakeDependentOption)
 
@@ -62,6 +62,10 @@ foreach(target IN LISTS REBLUE_TARGETS)
     set_target_properties(${target} PROPERTIES WIN32_EXECUTABLE ON)
 endforeach()
 
+# OBJECT and never STATIC: an archive drops the REX_HOOK symbols.
+add_library(reblue_common OBJECT)
+set(REBLUE_COMMON_TARGETS reblue_common)
+
 function(reblue_add_sources target_list)
     set(files ${ARGN})
     list(TRANSFORM files PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
@@ -72,6 +76,11 @@ function(reblue_add_sources target_list)
 endfunction()
 
 function(reblue_sources)
+    reblue_add_sources(REBLUE_COMMON_TARGETS ${ARGN})
+endfunction()
+
+# For sources that reach a backend-conditional header.
+function(reblue_backend_sources)
     reblue_add_sources(REBLUE_TARGETS ${ARGN})
 endfunction()
 
@@ -111,6 +120,46 @@ if(NOT WIN32)
     find_package(CURL QUIET)
 endif()
 
+rexglue_apply_target_settings(reblue_common)
+target_link_libraries(reblue_common PRIVATE rex::runtime)
+# gpu/backend.h and gpu/gpu_profiling.h #error on this.
+target_compile_definitions(reblue_common PRIVATE REBLUE_COMMON_TU)
+# The hooks include the codegen-emitted reblue_funcs.h.
+add_dependencies(reblue_common reblue_codegen)
+
+foreach(target IN LISTS REBLUE_COMMON_TARGETS REBLUE_TARGETS)
+    # shader_common.h is the one source of the SPEC_CONSTANT_* values, shared
+    # with the recompiler and the host HLSL.
+    target_include_directories(${target} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}" src "${REBLUE_GEN_DIR}"
+        "${REBLUE_SHADER_COMMON_DIR}" "${REXGLUE_ENTRYPOINT_INCLUDE_DIR}")
+
+    target_compile_definitions(${target} PRIVATE
+        $<$<BOOL:${REBLUE_BUILD_INSTALLER}>:REBLUE_BUILD_INSTALLER>
+        $<$<BOOL:${REBLUE_PSO_CAP}>:REBLUE_PSO_CAP=1>
+        $<${REBLUE_PROFILING_ON}:REXGLUE_ENABLE_PROFILING>)
+
+    # Named for their headers: the OBJECT library links nothing itself.
+    target_link_libraries(${target} PRIVATE
+        plume
+        reblue_thirdparty
+        rex::o1heap
+        xxHash::xxhash
+        # The SDK only links TracyClient into non-Release configs, so a Release
+        # build that forces zones on has to pull it in itself.
+        $<${REBLUE_PROFILING_ON}:rex::TracyClient>)
+
+    # platform/http.cpp is shared, so this has to reach the object library too.
+    if(NOT WIN32 AND CURL_FOUND)
+        target_link_libraries(${target} PRIVATE CURL::libcurl)
+        target_compile_definitions(${target} PRIVATE REBLUE_HAVE_CURL)
+    endif()
+
+    if(REBLUE_PCH)
+        target_precompile_headers(${target} PRIVATE ${pch_headers})
+    endif()
+endforeach()
+
 foreach(target IN LISTS REBLUE_TARGETS)
     if(WIN32)
         target_sources(${target} PRIVATE res/windows/reblue.rc res/windows/reblue.manifest)
@@ -118,35 +167,12 @@ foreach(target IN LISTS REBLUE_TARGETS)
 
     rexglue_setup_target(${target})
 
-    # shader_common.h is the one source of the SPEC_CONSTANT_* values, shared
-    # with the recompiler and the host HLSL.
-    target_include_directories(${target} PRIVATE
-        src "${REBLUE_GEN_DIR}" "${REBLUE_SHADER_COMMON_DIR}")
-
-    target_compile_definitions(${target} PRIVATE
-        $<$<BOOL:${REBLUE_BUILD_INSTALLER}>:REBLUE_BUILD_INSTALLER>
-        $<$<BOOL:${REBLUE_PSO_CAP}>:REBLUE_PSO_CAP=1>
-        $<${REBLUE_PROFILING_ON}:REXGLUE_ENABLE_PROFILING>)
-
     target_link_libraries(${target} PRIVATE
-        plume
+        reblue_common
         reblue_generated
-        ${REBLUE_RECOMP_LIB}
-        reblue_thirdparty
-        rex::o1heap
-        xxHash::xxhash
-        # The SDK only links TracyClient into non-Release configs, so a Release
-        # build that forces zones on has to pull it in itself.
-        $<${REBLUE_PROFILING_ON}:rex::TracyClient>)
+        ${REBLUE_RECOMP_LIB})
     if(WIN32)
         target_link_libraries(${target} PRIVATE winmm ole32 uuid winhttp shell32)
-    elseif(CURL_FOUND)
-        target_link_libraries(${target} PRIVATE CURL::libcurl)
-        target_compile_definitions(${target} PRIVATE REBLUE_HAVE_CURL)
-    endif()
-
-    if(REBLUE_PCH)
-        target_precompile_headers(${target} PRIVATE ${pch_headers})
     endif()
 endforeach()
 

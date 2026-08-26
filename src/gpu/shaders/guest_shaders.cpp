@@ -20,6 +20,7 @@
 #include <zstd.h>
 
 #include "core/logging.h"
+#include "gpu/backend.h"
 #include "gpu/host_resource_heap.h"
 #include "gpu/pipeline/pso_recorder.h"
 #include "gpu/shaders/shader_cache.h"

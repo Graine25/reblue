@@ -16,6 +16,7 @@
 #endif
 
 #include "core/logging.h"
+#include "gpu/backend.h"
 #include "gpu/device.h"
 #include "gpu/frame_stats.h"
 

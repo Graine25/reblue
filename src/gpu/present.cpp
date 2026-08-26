@@ -22,6 +22,7 @@
 
 #include "core/logging.h"
 #include "engine/engine.h"
+#include "gpu/backend.h"
 #include "gpu/constant_buffers.h"
 #include "gpu/frame_stats.h"
 #include "gpu/gpu_timing.h"

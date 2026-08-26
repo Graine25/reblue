@@ -32,45 +32,6 @@ class Window;
 
 namespace bd::gpu {
 
-// REBLUE_D3D12 builds are D3D12 only, every other build Vulkan only. g_vulkan
-// is constexpr so the other backend's code folds away entirely. The build emits
-// only the active backend's host-shader blobs (see cmake/shaders.cmake).
-#if defined(REBLUE_D3D12)
-inline constexpr bool g_vulkan = false;
-inline constexpr plume::RenderShaderFormat kHostShaderFormat =
-    plume::RenderShaderFormat::DXIL;
-#define REBLUE_BLOB_SYMBOL(name) g_##name##_dxil
-#else
-inline constexpr bool g_vulkan = true;
-inline constexpr plume::RenderShaderFormat kHostShaderFormat =
-    plume::RenderShaderFormat::SPIRV;
-#define REBLUE_BLOB_SYMBOL(name) g_##name##_spirv
-#endif
-
-// MoltenVK-specific renderer behavior must not leak into native Vulkan builds.
-// CMake defines REBLUE_MVK only for the Apple Vulkan target.
-#if defined(REBLUE_MVK)
-inline constexpr bool g_mvk = true;
-static_assert(g_vulkan);
-#else
-inline constexpr bool g_mvk = false;
-#endif
-
-#define REBLUE_SHADER_BLOB(name)                                               \
-  REBLUE_BLOB_SYMBOL(name), sizeof(REBLUE_BLOB_SYMBOL(name))
-
-// One shared VERTEX|PIXEL push constant range, since VUID 00292 lets a stage
-// appear in only one: guest addresses at [0,24), copy helper block at [24,40).
-#if defined(REBLUE_D3D12)
-inline constexpr u32 kCopyPushConstantRangeIndex = 0;
-inline constexpr u32 kCopyPushConstantByteOffset = 0;
-#else
-inline constexpr u32 kGuestPushConstantRangeIndex = 0;
-inline constexpr u32 kCopyPushConstantRangeIndex = 0;
-inline constexpr u32 kCopyPushConstantByteOffset = 24;
-inline constexpr u32 kOcclusionDescriptorSetIndex = 4;
-#endif
-
 class Video {
 public:
   template <typename T>
@@ -365,11 +326,10 @@ struct VideoState {
 
   // Per slot, so a pipelined frame cannot clobber an in-flight copy.
   std::unique_ptr<plume::RenderShader> occlusion_count_ps;
-#if !defined(REBLUE_D3D12)
-  // Vulkan stand-in for the D3D12 root UAV (main layout set 4).
+  // Vulkan stand-in for the D3D12 root UAV (main layout set 4). Unconditional
+  // so VideoState has one layout for both backends.
   std::unique_ptr<plume::RenderDescriptorSet>
       occlusion_descriptor_set[kNumFrames];
-#endif
   std::unique_ptr<plume::RenderBuffer> occlusion_counter[kNumFrames];
   std::unique_ptr<plume::RenderBuffer> occlusion_readback[kNumFrames];
   std::unique_ptr<plume::RenderBuffer> occlusion_zero; // UploadBuffer 4B (=0)

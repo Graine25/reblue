@@ -14,6 +14,7 @@
 #include <plume_render_interface_builders.h>
 
 #include "core/logging.h"
+#include "gpu/backend.h"
 #include "gpu/constant_buffers.h"
 #include "gpu/device.h"
 

@@ -18,6 +18,7 @@
 #include <xxhash.h>
 
 #include "core/logging.h"
+#include "gpu/backend.h"
 #include "gpu/device.h"
 #include "gpu/format.h"
 #include "gpu/host_resource_heap.h"

@@ -19,6 +19,7 @@
 
 #include "core/logging.h"
 #include "core/memory_helpers.h"
+#include "gpu/backend.h"
 #include "gpu/d3d.h"
 #include "gpu/device.h"
 #include "gpu/host_resource_heap.h"

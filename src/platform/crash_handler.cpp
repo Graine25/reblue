@@ -17,6 +17,7 @@
 #include <typeinfo>
 
 #include <rex/exception_handler.h>
+#include <rex/filesystem.h>
 #include <rex/logging.h>
 #include <rex/runtime.h>
 #include <rex/version.h>
@@ -25,7 +26,7 @@
 #include "platform/fatal_dialog.h"
 
 #if defined(_WIN32)
-// Linker-provided base of THIS module (reblue.exe). Its ADDRESS is the
+// Linker-provided base of THIS module (the host exe). Its ADDRESS is the
 // post-ASLR load base. Using it avoids including Windows.h (project rule) while
 // still reducing a faulting host PC to an RVA that the .map/.pdb resolves
 // offline.
@@ -52,7 +53,7 @@ namespace {
 // Guest virtual address space is the low 4 GB of the host mapping.
 constexpr u64 kGuestAddressSpaceSize = 0x100000000ull;
 
-// Generous upper bound on the reblue.exe image span (it embeds all recompiled
+// Generous upper bound on the host exe image span (it embeds all recompiled
 // guest code, so it is large). Used only to decide whether a host address
 // reduces to an in-module RVA, and oversizing it never misclassifies an
 // in-module address.
@@ -65,6 +66,14 @@ u64 HostModuleBase() { return reinterpret_cast<u64>(&__ImageBase); }
 // directly, so the base is only used to suppress bogus RVA lines.
 u64 HostModuleBase() { return 0; }
 #endif
+
+// Resolved at install, never on the crash path: the handler must not call into
+// the filesystem while unwinding a fault.
+std::string g_host_module_name;
+
+const char *HostModuleName() {
+  return g_host_module_name.empty() ? "host" : g_host_module_name.c_str();
+}
 
 // Set by whichever crash path reports first. A second entry, whether a fault
 // inside a handler or the abort() that ends the terminate handler, skips
@@ -120,9 +129,9 @@ const char *AvOperationName(rex::arch::Exception::AccessViolationOperation op) {
 }
 
 // Walk the faulting thread's stack (the VEH runs inline on it) and log each
-// return address with its reblue.exe-relative RVA, giving the call chain that
+// return address with its module-relative RVA, giving the call chain that
 // led to the separately logged faulting PC. The top frames are the crash
-// handler itself, so the faulting caller is the first reblue.exe+RVA below the
+// handler itself, so the faulting caller is the first module+RVA below the
 // OS dispatch frames.
 void LogBacktrace(u64 base) {
 #if defined(_WIN32)
@@ -134,7 +143,7 @@ void LogBacktrace(u64 base) {
   for (unsigned short i = 0; i < n; ++i) {
     const u64 a = reinterpret_cast<u64>(frames[i]);
     if (a >= base && a - base < kHostImageSpan) {
-      BD_CRITICAL("    [{:>2}] {:#018x}  (reblue.exe+{:#010x})", i, a,
+      BD_CRITICAL("    [{:>2}] {:#018x}  ({}+{:#010x})", i, a, HostModuleName(),
                   a - base);
     } else {
       BD_CRITICAL("    [{:>2}] {:#018x}", i, a);
@@ -195,8 +204,8 @@ void LogStackCodeAddresses(const rex::arch::HostThreadContext *ctx,
 #if defined(_WIN32)
     if (v < base || v - base >= kHostImageSpan)
       continue;
-    BD_CRITICAL("    [sp+{:#05x}] {:#018x}  (reblue.exe+{:#010x})", p - sp, v,
-                v - base);
+    BD_CRITICAL("    [sp+{:#05x}] {:#018x}  ({}+{:#010x})", p - sp, v,
+                HostModuleName(), v - base);
 #else
     Dl_info info{};
     // dladdr resolves mapped module addresses only, so it doubles as the
@@ -260,12 +269,13 @@ bool CrashHandler(rex::arch::Exception *ex, void * /*data*/) {
 
   BD_CRITICAL("================ reblue host crash ================");
   BD_CRITICAL("build: {}", REXGLUE_BUILD_TITLE);
-  BD_CRITICAL("module base: reblue.exe @ {:#018x}", host_base);
+  BD_CRITICAL("module base: {} @ {:#018x}", HostModuleName(), host_base);
   BD_CRITICAL("exception: {} @ host pc {:#018x}", ExceptionCodeName(ex->code()),
               ex->pc());
   if (host_base && ex->pc() >= host_base &&
       ex->pc() - host_base < kHostImageSpan) {
-    BD_CRITICAL("faulting RVA: reblue.exe+{:#010x}", ex->pc() - host_base);
+    BD_CRITICAL("faulting RVA: {}+{:#010x}", HostModuleName(),
+                ex->pc() - host_base);
   }
 
   if (ex->code() == rex::arch::Exception::Code::kAccessViolation) {
@@ -298,7 +308,8 @@ bool CrashHandler(rex::arch::Exception *ex, void * /*data*/) {
   const bool in_module = host_base && ex->pc() >= host_base &&
                          ex->pc() - host_base < kHostImageSpan;
   const std::string where =
-      in_module ? fmt::format("reblue.exe+{:#010x}", ex->pc() - host_base)
+      in_module ? fmt::format("{}+{:#010x}", HostModuleName(),
+                              ex->pc() - host_base)
                 : fmt::format("{:#018x}", ex->pc());
   ShowFatalError("reblue Crashed",
                  fmt::format("reblue hit a fatal error and has to close.\n\n"
@@ -417,6 +428,10 @@ void InstallCrashStackForThread() {
 }
 
 void InstallTerminateHandler() {
+  if (g_host_module_name.empty())
+    g_host_module_name =
+        rex::filesystem::GetExecutablePath().filename().string();
+
   std::set_terminate(&TerminateHandler);
 
 #if !defined(_WIN32)

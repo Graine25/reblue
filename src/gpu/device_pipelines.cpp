@@ -15,6 +15,7 @@
 #include <plume_render_interface_builders.h>
 
 #include "core/logging.h"
+#include "gpu/backend.h"
 #include "gpu/bindless_allocator.h"
 #include "gpu/format.h"
 #include "gpu/settings.h"

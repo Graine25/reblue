@@ -22,6 +22,7 @@
 #include "core/profiling.h"
 
 #include "core/logging.h"
+#include "gpu/backend.h"
 #include "gpu/format.h"
 #include "gpu/frame_stats.h"
 #include "gpu/gpu_timing.h"

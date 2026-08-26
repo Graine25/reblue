@@ -10,6 +10,10 @@
  */
 #pragma once
 
+#if defined(REBLUE_COMMON_TU)
+#error "backend-conditional: move this TU to reblue_backend_only in src/CMakeLists.txt, or use core/profiling.h"
+#endif
+
 #include <rex/types.h>
 
 #include "core/profiling.h"

@@ -40,6 +40,9 @@ private:
   void Open(u32 taskAddr);
   void Park(u32 taskAddr);
   void Close();
+  // Takes the menu off screen and gives the band's prompt slots back, without
+  // touching the stock screen. Close is that plus handing the screen back.
+  void Dismiss();
   void HidePrompts();
   void RestorePrompts();
 
@@ -48,6 +51,10 @@ private:
   // One load per camp visit, so a new camp creates fresh over the handles the
   // old one took down with its task tree.
   bd::TaskRef camp_;
+  // The stock screen reblue is drawing over. It can be killed from under the
+  // menu without one last update, and the menu outlives it by design, so its
+  // death is the only signal that the screen is no longer on.
+  bd::TaskRef config_;
   // Open runs every frame the stock screen is up, so the load failure is
   // reported once per camp task rather than once per frame.
   bd::TaskRef warned_;

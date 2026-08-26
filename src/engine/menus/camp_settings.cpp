@@ -119,6 +119,19 @@ void CampSettings::RestorePrompts() {
 // session is immediate.
 void CampSettings::Tick() {
   const u32 camp = bd::mem::try_load<u32>(addr::kCampMainTask);
+
+  // The camp menu key closes the whole camp screen from under the Config task,
+  // which dies without a last update, so Update never reaches the exit path.
+  // The menu hangs off Camp::MainTask rather than off that screen, so left
+  // alone it keeps drawing over whatever the camp puts up next.
+  if (open_ && !config_) {
+    if (camp_.Is(camp))
+      Dismiss();
+    else
+      // The camp went too, and took the menu's task tree with it.
+      open_ = false;
+  }
+
   if (!bd::LiveTask(camp))
     return;
   // The camp task is built by the field load itself, and a LoadAsync issued
@@ -131,6 +144,7 @@ void CampSettings::Tick() {
   if (!camp_.Rebind(camp))
     return;
   open_ = false;
+  config_.Reset();
   RegisterVFS(ConfigMenu::Surface::InGame);
   menu_.Create(camp, ConfigMenu::Surface::InGame,
                &__imp__Camp__Config__MainTask__vf02);
@@ -151,6 +165,7 @@ void CampSettings::Open(u32 taskAddr) {
   if (!menu_.Prime())
     return;
   open_ = true;
+  config_ = bd::TaskRef(taskAddr);
   Park(taskAddr);
 }
 
@@ -174,16 +189,22 @@ void CampSettings::Park(u32 taskAddr) {
   CampConfigSetState(taskAddr, kStateInert);
 }
 
+void CampSettings::Dismiss() {
+  menu_.Dismiss();
+  RestorePrompts();
+  open_ = false;
+  config_.Reset();
+}
+
 void CampSettings::Close() {
   if (!open_)
     return;
-  menu_.Dismiss();
-  RestorePrompts();
+  Dismiss();
   // Handed back exactly as the stock screen left it, so its own exit path sees
-  // the state it expects.
+  // the state it expects. Close alone does this: a screen that went on its own
+  // has already put the header back, and hiding it again blanks the band.
   if (D2AnimeTask header = CampHeader())
     header.SetVisibleAndPlay(false);
-  open_ = false;
 }
 
 bool CampSettings::Update(PPCContext &ctx, u8 *base, u32 taskAddr) {

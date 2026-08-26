@@ -11,10 +11,10 @@ $ErrorActionPreference = 'Stop'
 
 $sdk = Join-Path $PWD "sdk/win-amd64"
 $channel = if ($env:REBLUE_UPDATE_CHANNEL) { $env:REBLUE_UPDATE_CHANNEL } else { "stable" }
-$updateUrl = if ($env:REBLUE_UPDATE_BASE) { "$env:REBLUE_UPDATE_BASE/manifest/$channel.toml" } else { "" }
 cmake --preset $env:PRESET `
   "-DCMAKE_PREFIX_PATH=$sdk" `
-  "-DREBLUE_UPDATE_URL=$updateUrl" `
+  "-DREBLUE_UPDATE_BASE=$env:REBLUE_UPDATE_BASE" `
+  "-DREBLUE_UPDATE_CHANNEL=$channel" `
   "-DREBLUE_VERSION_SUFFIX=$env:REBLUE_VERSION_SUFFIX" `
   "-DREBLUE_PCH=OFF" `
   "-DCMAKE_C_COMPILER_LAUNCHER=sccache" `

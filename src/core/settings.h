@@ -22,6 +22,10 @@ std::string FormatCvar(i32 v);
 std::string FormatCvar(bool v);
 std::string FormatCvar(f64 v);
 
+enum class UpdateChannel : i32 { Stable, Nightly };
+
+const char *ToString(UpdateChannel channel);
+
 class Settings {
 public:
   static Settings &Get();
@@ -76,6 +80,9 @@ public:
   bool UpdateCheck() const { return updateCheck_; }
   bool SetUpdateCheck(bool v);
 
+  bd::UpdateChannel UpdateChannel() const { return updateChannel_; }
+  bool SetUpdateChannel(bd::UpdateChannel v);
+
   const std::string &UpdateUrl() const { return updateUrl_; }
 
   // Empty means the default location, resolved by reblue_app.
@@ -100,9 +107,12 @@ private:
   void AdoptProfiler();
   void AdoptShutdownTimeoutMs();
   void AdoptUpdateCheck();
-  void AdoptUpdateUrl();
+  void AdoptUpdateBase();
+  void AdoptUpdateChannel();
   void AdoptSavesPath();
   void AdoptCachePath();
+
+  void ComposeUpdateUrl();
 
   bool devmode_ = false;
   bool dbgPrint_ = false;
@@ -114,6 +124,8 @@ private:
   bool profiler_ = false;
   i32 shutdownTimeoutMs_ = 1500;
   bool updateCheck_ = true;
+  std::string updateBase_;
+  bd::UpdateChannel updateChannel_ = bd::UpdateChannel::Stable;
   std::string updateUrl_;
   std::string savesPath_;
   std::string cachePath_;

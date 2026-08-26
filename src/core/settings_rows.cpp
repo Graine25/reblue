@@ -86,6 +86,13 @@ constexpr SettingOption kFPS[] = {
 constexpr SettingOption kOnOff[] = {
     {.text = "On", .num = 1, .value = "true", .key = "opt.on"},
     {.text = "Off", .num = 0, .value = "false", .key = "opt.off"}};
+constexpr SettingOption kUpdateChannel[] = {
+    {.text = "Stable",
+     .num = static_cast<double>(UpdateChannel::Stable),
+     .key = "settings.gameplay.update_channel.stable"},
+    {.text = "Nightly",
+     .num = static_cast<double>(UpdateChannel::Nightly),
+     .key = "settings.gameplay.update_channel.nightly"}};
 // Which block of the button glyph sheet every prompt draws from. num is the
 // GlyphSet value engine/glyph_set.h declares.
 constexpr SettingOption kGlyphSet[] = {
@@ -414,6 +421,20 @@ constexpr SettingRow kGameplaySettings[] = {
                      }},
      .options = kOnOff,
      .count = OptCount(kOnOff)},
+    {.label = "settings.gameplay.update_channel.label",
+     .group = "menu.header.advanced",
+     .binding = {.get =
+                     [] {
+                       return static_cast<double>(
+                           Settings::Get().UpdateChannel());
+                     },
+                 .set =
+                     [](double v) {
+                       return Settings::Get().SetUpdateChannel(
+                           static_cast<UpdateChannel>(static_cast<i32>(v)));
+                     }},
+     .options = kUpdateChannel,
+     .count = OptCount(kUpdateChannel)},
     {.label = "settings.gameplay.developer_mode.label",
      .group = "menu.header.advanced",
      .binding = {

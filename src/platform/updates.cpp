@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include <rex/cvar.h>
 #include <rex/filesystem.h>
 #include <rex/types.h>
 
@@ -41,6 +42,19 @@ Updates &Updates::Get() {
 }
 
 void Updates::Start() {
+  if (started_.exchange(true))
+    return;
+
+  // Settings registered its own callback at OnPostInitLogging and callbacks
+  // run in registration order, so the URL below is already the new channel's.
+  rex::cvar::RegisterChangeCallback(
+      "bd_update_channel",
+      [this](std::string_view, std::string_view) { BeginCheck(); });
+
+  BeginCheck();
+}
+
+void Updates::BeginCheck() {
   const auto &settings = bd::Settings::Get();
   if (!settings.UpdateCheck())
     return;
@@ -49,14 +63,28 @@ void Updates::Start() {
     BD_INFO("No update endpoint, skipping the update and content checks");
     return;
   }
-  if (started_.exchange(true))
+  // A download already running was accepted against the answer this replaces.
+  if (apply_stage_.load() == ApplyStage::kWorking)
     return;
+  if (checking_.exchange(true))
+    return;
+
+  {
+    std::lock_guard lock(mutex_);
+    newer_.reset();
+  }
+  has_newer_.store(false);
   stage_.store(Stage::kChecking);
 
   // Detached: the ordered exit kills the process outright, so a check still
   // waiting on the network never holds shutdown up.
-  std::thread([this, url] { Check(url); }).detach();
+  std::thread([this, url] {
+    Check(url);
+    checking_.store(false);
+  }).detach();
 }
+
+u32 Updates::Generation() const { return generation_.load(); }
 
 Updates::Stage Updates::State() const { return stage_.load(); }
 
@@ -77,6 +105,7 @@ void Updates::Check(const std::string &url) {
   auto manifest = AppManifest::Fetch(url, error);
   if (!manifest) {
     BD_WARN("Manifest fetch from {} failed: {}", url, error);
+    generation_.fetch_add(1);
     stage_.store(Stage::kDone);
     return;
   }
@@ -103,6 +132,7 @@ void Updates::Check(const std::string &url) {
     }
   }
 
+  generation_.fetch_add(1);
   stage_.store(Stage::kDone);
 
   // Packs carry their own versions and their own document, so this runs

@@ -61,8 +61,11 @@ function(reblue_write_build_info out_header)
 
     # Empty unless the build supplies one, which leaves the check off for
     # local builds and keeps the endpoint out of the source tree.
-    if(NOT DEFINED REBLUE_UPDATE_URL)
-        set(REBLUE_UPDATE_URL "")
+    if(NOT DEFINED REBLUE_UPDATE_BASE)
+        set(REBLUE_UPDATE_BASE "")
+    endif()
+    if(NOT DEFINED REBLUE_UPDATE_CHANNEL)
+        set(REBLUE_UPDATE_CHANNEL "stable")
     endif()
 
     # Nightlies append a run counter so consecutive ones compare as newer.

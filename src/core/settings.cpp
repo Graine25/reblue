@@ -21,7 +21,8 @@ REXCVAR_DECLARE(bool, bd_perf_csv);
 REXCVAR_DECLARE(bool, bd_profiler);
 REXCVAR_DECLARE(i32, bd_shutdown_timeout_ms);
 REXCVAR_DECLARE(bool, bd_update_check);
-REXCVAR_DECLARE(std::string, bd_update_url);
+REXCVAR_DECLARE(std::string, bd_update_base);
+REXCVAR_DECLARE(std::string, bd_update_channel);
 REXCVAR_DECLARE(std::string, bd_saves_path);
 REXCVAR_DECLARE(std::string, bd_cache_path);
 
@@ -64,12 +65,16 @@ REXCVAR_DEFINE_INT32(bd_shutdown_timeout_ms, 1500, kCvarGroup,
     .range(100, 30000);
 
 REXCVAR_DEFINE_BOOL(bd_update_check, true, kCvarGroup,
-                    "Read bd_update_url at startup: offer a newer re:Blue "
+                    "Ask the update endpoint at startup: offer a newer re:Blue "
                     "release, and fetch the content packs it points at.");
 
-REXCVAR_DEFINE_STRING(bd_update_url, REBLUE_UPDATE_URL, kCvarGroup,
-                      "Manifest the startup check reads for the current app "
-                      "version. Empty disables the check.");
+REXCVAR_DEFINE_STRING(bd_update_base, REBLUE_UPDATE_BASE, kCvarGroup,
+                      "Update endpoint the startup check asks, without a "
+                      "trailing slash. Empty disables the check.");
+
+REXCVAR_DEFINE_STRING(bd_update_channel, REBLUE_UPDATE_CHANNEL, kCvarGroup,
+                      "Which builds the check offers: stable or nightly. "
+                      "Names the manifest read under bd_update_base.");
 
 // Saves live beside the game, NOT under user_data_root: that root is handed to
 // the XAM content manager, so nesting saves inside it makes the two contend
@@ -82,6 +87,14 @@ REXCVAR_DEFINE_STRING(
     "Transient cache directory (PSO capture). Empty = <exe_dir>/cache.");
 
 namespace bd {
+namespace {
+
+UpdateChannel ChannelOfName(const std::string &name) {
+  return name == ToString(UpdateChannel::Nightly) ? UpdateChannel::Nightly
+                                                  : UpdateChannel::Stable;
+}
+
+} // namespace
 
 std::string FormatCvar(i32 v) { return std::to_string(v); }
 std::string FormatCvar(bool v) { return v ? "true" : "false"; }
@@ -90,6 +103,16 @@ std::string FormatCvar(f64 v) {
   char buf[32];
   auto [end, ec] = std::to_chars(buf, buf + sizeof(buf), v);
   return ec == std::errc() ? std::string(buf, end) : std::string("0");
+}
+
+const char *ToString(UpdateChannel channel) {
+  switch (channel) {
+  case UpdateChannel::Nightly:
+    return "nightly";
+  case UpdateChannel::Stable:
+    break;
+  }
+  return "stable";
 }
 
 Settings &Settings::Get() {
@@ -119,7 +142,22 @@ void Settings::AdoptShutdownTimeoutMs() {
 void Settings::AdoptUpdateCheck() {
   updateCheck_ = REXCVAR_GET(bd_update_check);
 }
-void Settings::AdoptUpdateUrl() { updateUrl_ = REXCVAR_GET(bd_update_url); }
+void Settings::AdoptUpdateBase() {
+  updateBase_ = REXCVAR_GET(bd_update_base);
+  ComposeUpdateUrl();
+}
+void Settings::AdoptUpdateChannel() {
+  updateChannel_ = ChannelOfName(REXCVAR_GET(bd_update_channel));
+  ComposeUpdateUrl();
+}
+
+void Settings::ComposeUpdateUrl() {
+  updateUrl_ = updateBase_.empty()
+                   ? std::string()
+                   : updateBase_ + "/manifest/" + ToString(updateChannel_) +
+                         ".toml";
+}
+
 void Settings::AdoptSavesPath() { savesPath_ = REXCVAR_GET(bd_saves_path); }
 void Settings::AdoptCachePath() { cachePath_ = REXCVAR_GET(bd_cache_path); }
 
@@ -166,6 +204,10 @@ bool Settings::SetUpdateCheck(bool v) {
   return rex::cvar::SetFlagByName("bd_update_check", FormatCvar(v));
 }
 
+bool Settings::SetUpdateChannel(bd::UpdateChannel v) {
+  return rex::cvar::SetFlagByName("bd_update_channel", ToString(v));
+}
+
 void Settings::AdoptCvars() {
   AdoptDevmode();
   AdoptDbgPrint();
@@ -177,7 +219,8 @@ void Settings::AdoptCvars() {
   AdoptProfiler();
   AdoptShutdownTimeoutMs();
   AdoptUpdateCheck();
-  AdoptUpdateUrl();
+  AdoptUpdateBase();
+  AdoptUpdateChannel();
   AdoptSavesPath();
   AdoptCachePath();
 }
@@ -201,7 +244,8 @@ void Settings::Init() {
   reg("bd_profiler", &Settings::AdoptProfiler);
   reg("bd_shutdown_timeout_ms", &Settings::AdoptShutdownTimeoutMs);
   reg("bd_update_check", &Settings::AdoptUpdateCheck);
-  reg("bd_update_url", &Settings::AdoptUpdateUrl);
+  reg("bd_update_base", &Settings::AdoptUpdateBase);
+  reg("bd_update_channel", &Settings::AdoptUpdateChannel);
   reg("bd_saves_path", &Settings::AdoptSavesPath);
   reg("bd_cache_path", &Settings::AdoptCachePath);
 }

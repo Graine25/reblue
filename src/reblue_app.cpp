@@ -1004,7 +1004,8 @@ bool ReblueApp::PendingOverlayWork() const {
   auto &updates = Updates::Get();
   if (updates.State() == Updates::Stage::kChecking)
     return true;
-  if (Updates::CanApply() && !update_prompt_shown_ && updates.HasNewer())
+  if (Updates::CanApply() && updates.HasNewer() &&
+      updates.Generation() != update_prompt_generation_)
     return true;
   const auto sync = Sync::Get().State();
   return sync == Sync::Stage::kChecking || sync == Sync::Stage::kFetching;
@@ -1022,12 +1023,13 @@ void ReblueApp::UpdateCheckStatus() {
 void ReblueApp::MaybeShowUpdatePrompt() {
   if (!bd::platform::Updates::CanApply())
     return;
-  if (update_prompt_shown_)
+  const u32 generation = bd::platform::Updates::Get().Generation();
+  if (generation == update_prompt_generation_)
     return;
   const auto newer = bd::platform::Updates::Get().Newer();
   if (!newer)
     return;
-  update_prompt_shown_ = true;
+  update_prompt_generation_ = generation;
 
   bd::ui::UpdatePromptContext ctx;
   ctx.install_root = install_root_;

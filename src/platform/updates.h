@@ -27,9 +27,9 @@ struct Release {
   std::string url;     // its notes_url
 };
 
-// Fetches bd_update_url as a manifest and compares the app version it names
-// against this build. Runs on its own thread: nothing on the boot path waits
-// on it.
+// Fetches the channel's manifest and compares the app version it names against
+// this build. Runs on its own thread: nothing on the boot path waits on it, and
+// a channel change runs it again.
 class Updates {
 public:
   static Updates &Get();
@@ -57,8 +57,12 @@ public:
   // Fetches the one document this build asks for, once, when
   // bd_update_check is set. Returns immediately. Call once the VFS is up,
   // since the content sync it hands off to reconciles against the VFS
-  // catalog.
+  // catalog. Arms the channel watch whether or not the check itself is on.
   void Start();
+
+  // Which check produced the current answer, so a caller that acted on one
+  // answer can tell a later answer from the same one read twice.
+  u32 Generation() const;
 
   Stage State() const;
 
@@ -104,6 +108,7 @@ private:
   Updates(const Updates &) = delete;
   Updates &operator=(const Updates &) = delete;
 
+  void BeginCheck();
   void Check(const std::string &url);
   ApplyResult Apply(const std::filesystem::path &install_root);
 
@@ -111,8 +116,10 @@ private:
   std::optional<Release> newer_;
   std::optional<AppManifest> manifest_;
   std::atomic<bool> started_{false};
+  std::atomic<bool> checking_{false};
   std::atomic<Stage> stage_{Stage::kIdle};
   std::atomic<bool> has_newer_{false};
+  std::atomic<u32> generation_{0};
 
   std::atomic<bool> apply_started_{false};
   std::atomic<ApplyStage> apply_stage_{ApplyStage::kIdle};

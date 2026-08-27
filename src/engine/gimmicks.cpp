@@ -11,10 +11,15 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <type_traits>
+#include <vector>
 
 #include "core/logging.h"
 #include "engine/field.h"
+#include "vfs/vfs.h"
+
 #include "embedded.h"
 
 namespace bd::engine {
@@ -88,20 +93,20 @@ struct Gimmicks::Table {
   }
 };
 
-std::unique_ptr<Gimmicks::Table> Gimmicks::ParseTable() {
+std::unique_ptr<Gimmicks::Table> Gimmicks::Parse(const u8 *data, size_t size,
+                                                 std::string_view origin) {
   auto t = std::make_unique<Table>();
-  constexpr auto kBlob = bd::Embedded("gimmicks_table.bin");
   constexpr u32 kHeaderWords = 9;
   constexpr u32 kHeaderBytes = kHeaderWords * sizeof(u32);
-  if (kBlob.size < kHeaderBytes)
+  if (size < kHeaderBytes)
     return t;
 
   u32 head[kHeaderWords];
-  std::memcpy(head, kBlob.data, kHeaderBytes);
+  std::memcpy(head, data, kHeaderBytes);
   if (head[0] != kTableMagic || head[1] != kTableVersion) {
-    BD_ERROR("[gimmicks] embedded table is magic {:#x} version {}, expected "
-             "{:#x} version {}",
-             head[0], head[1], kTableMagic, kTableVersion);
+    BD_ERROR("[gimmicks] {} is magic {:#x} version {}, expected {:#x} "
+             "version {}",
+             origin, head[0], head[1], kTableMagic, kTableVersion);
     return t;
   }
 
@@ -110,13 +115,13 @@ std::unique_ptr<Gimmicks::Table> Gimmicks::ParseTable() {
   const auto take = [&](auto &dst, size_t count) {
     using Elem = typename std::decay_t<decltype(dst)>::value_type;
     const size_t bytes = count * sizeof(Elem);
-    if (truncated || off + bytes > kBlob.size) {
+    if (truncated || off + bytes > size) {
       truncated = true;
       return;
     }
     dst.resize(count);
     if (count)
-      std::memcpy(dst.data(), kBlob.data + off, bytes);
+      std::memcpy(dst.data(), data + off, bytes);
     off = (off + bytes + 3u) & ~size_t{3u};
   };
 
@@ -133,8 +138,8 @@ std::unique_ptr<Gimmicks::Table> Gimmicks::ParseTable() {
   take(t->strings, head[8]);
 
   if (truncated) {
-    BD_ERROR("[gimmicks] embedded table is truncated at {} of {} bytes", off,
-             kBlob.size);
+    BD_ERROR("[gimmicks] {} is truncated at {} of {} bytes", origin, off,
+             size);
     return t;
   }
 
@@ -148,29 +153,47 @@ std::unique_ptr<Gimmicks::Table> Gimmicks::ParseTable() {
         m.pointFirst + m.pointCount > t->points.size() ||
         m.chestFirst + m.chestCount > t->chestsPlaced.size() ||
         m.barrierFirst + m.barrierCount > t->barriersPlaced.size()) {
-      BD_ERROR("[gimmicks] embedded table has an out-of-range map record");
+      BD_ERROR("[gimmicks] {} has an out-of-range map record", origin);
       return t;
     }
   }
   for (const PlacementRec &p : t->chestsPlaced) {
     if (p.slot >= t->chestFlags.size()) {
-      BD_ERROR("[gimmicks] embedded table has a bad chest index");
+      BD_ERROR("[gimmicks] {} has a bad chest index", origin);
       return t;
     }
   }
   for (const PlacementRec &p : t->barriersPlaced) {
     if (p.slot >= t->barriers.size()) {
-      BD_ERROR("[gimmicks] embedded table has a bad barrier index");
+      BD_ERROR("[gimmicks] {} has a bad barrier index", origin);
       return t;
     }
   }
   if (!t->strings.empty() && t->strings.back() != '\0') {
-    BD_ERROR("[gimmicks] embedded table's string block is unterminated");
+    BD_ERROR("[gimmicks] {}'s string block is unterminated", origin);
     return t;
   }
 
   t->ok = true;
   return t;
+}
+
+std::unique_ptr<Gimmicks::Table> Gimmicks::ParseTable() {
+  const auto delivered = vfs::VFS::Get().Content().Find("gimmicks_table.bin");
+  if (!delivered.empty()) {
+    std::ifstream in(delivered, std::ios::binary);
+    const std::vector<u8> bytes((std::istreambuf_iterator<char>(in)),
+                                std::istreambuf_iterator<char>());
+    auto t = Parse(bytes.data(), bytes.size(), delivered.string());
+    if (t->ok) {
+      BD_INFO("[gimmicks] table from {}", delivered.string());
+      return t;
+    }
+    BD_WARN("[gimmicks] falling back to the baked table");
+  }
+
+  constexpr auto kBlob = bd::Embedded("gimmicks_table.bin");
+  return Parse(kBlob.data, kBlob.size, "the baked table");
 }
 
 const char *ToString(GimmickKind kind) {

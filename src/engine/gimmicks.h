@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -108,6 +109,8 @@ private:
 
   struct Table;
   static std::unique_ptr<Table> ParseTable();
+  static std::unique_ptr<Table> Parse(const u8 *data, size_t size,
+                                      std::string_view origin);
 
   std::unique_ptr<Table> table_;
 };

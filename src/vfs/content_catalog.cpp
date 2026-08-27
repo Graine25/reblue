@@ -60,39 +60,58 @@ std::filesystem::path ContentCatalog::DownloadPathFor(std::string_view id,
          (std::string(id) + "-" + std::to_string(version) + ".zip");
 }
 
+std::vector<ContentPack> ContentCatalog::Snapshot() const {
+  std::lock_guard lock(mutex_);
+  return packs_;
+}
+
 i64 ContentCatalog::InstalledVersion(std::string_view id) const {
+  std::lock_guard lock(mutex_);
   auto it = std::find_if(packs_.begin(), packs_.end(),
                          [&](const ContentPack &p) { return p.id == id; });
   return it == packs_.end() ? 0 : it->version;
 }
 
+std::filesystem::path ContentCatalog::Find(std::string_view name) const {
+  std::error_code ec;
+  for (const auto &pack : Snapshot()) {
+    auto path = pack.dir / name;
+    if (std::filesystem::is_regular_file(path, ec))
+      return path;
+  }
+  return {};
+}
+
 void ContentCatalog::Discover() {
   namespace fs = std::filesystem;
-  packs_.clear();
+
+  std::vector<ContentPack> found;
 
   std::error_code ec;
-  if (root_.empty() || !fs::is_directory(root_, ec))
-    return;
-
-  for (const auto &entry : fs::directory_iterator(root_, ec)) {
-    if (!entry.is_directory(ec))
-      continue;
-    const auto name = entry.path().filename().string();
-    // Staging and downloads share the root and are not packs.
-    if (name.empty() || name.front() == '.')
-      continue;
-    packs_.push_back({name, ReadVersion(entry.path()), entry.path()});
+  if (!root_.empty() && fs::is_directory(root_, ec)) {
+    for (const auto &entry : fs::directory_iterator(root_, ec)) {
+      if (!entry.is_directory(ec))
+        continue;
+      const auto name = entry.path().filename().string();
+      // Staging and downloads share the root and are not packs.
+      if (name.empty() || name.front() == '.')
+        continue;
+      found.push_back({name, ReadVersion(entry.path()), entry.path()});
+    }
+    std::sort(
+        found.begin(), found.end(),
+        [](const ContentPack &a, const ContentPack &b) { return a.id < b.id; });
   }
-  std::sort(
-      packs_.begin(), packs_.end(),
-      [](const ContentPack &a, const ContentPack &b) { return a.id < b.id; });
+
+  std::lock_guard lock(mutex_);
+  packs_ = std::move(found);
 }
 
 size_t ContentCatalog::Mount() {
   Unmount();
 
   size_t overrides = 0;
-  for (const auto &pack : packs_) {
+  for (const auto &pack : Snapshot()) {
     auto mount = LooseMount::Scan(pack.dir);
     overrides += mount->KeyCount();
 
@@ -114,8 +133,8 @@ void ContentCatalog::Reload() {
   // Mount unconditionally: it unmounts first, dropping a pack that is no
   // longer there.
   const size_t overrides = Mount();
-  if (!packs_.empty())
-    BD_INFO("[content] {} pack(s), {} override(s)", packs_.size(), overrides);
+  if (const size_t count = Snapshot().size(); count != 0)
+    BD_INFO("[content] {} pack(s), {} override(s)", count, overrides);
 }
 
 void ContentCatalog::Commit(const std::vector<std::string> &ids) {

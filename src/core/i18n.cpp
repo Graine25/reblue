@@ -20,6 +20,7 @@
 
 #include "engine/engine.h"
 #include "platform/platform.h"
+#include "vfs/vfs.h"
 
 #include "embedded.h"
 
@@ -77,14 +78,16 @@ void MergeTOML(std::string_view text, std::string_view origin, Catalog &out) {
   }
 }
 
-void MergeFile(const std::filesystem::path &path, Catalog &out) {
+bool MergeFile(const std::filesystem::path &path, Catalog &out) {
   std::error_code ec;
-  if (!std::filesystem::exists(path, ec))
-    return;
+  if (path.empty() || !std::filesystem::exists(path, ec))
+    return false;
   try {
     Flatten(toml::parse_file(path.string()), "", out);
+    return true;
   } catch (const toml::parse_error &e) {
     BD_WARN("[i18n] {} parse error: {}", path.string(), e.description());
+    return false;
   }
 }
 
@@ -106,8 +109,14 @@ void Reload() {
   g_markers.clear();
   g_fallbacks.clear();
 
-  constexpr auto kCatalog = bd::Embedded("localization.toml");
-  MergeTOML(kCatalog.text(), "localization.toml", g_catalog);
+  const auto delivered = vfs::VFS::Get().Content().Find("localization.toml");
+  if (MergeFile(delivered, g_catalog)) {
+    BD_INFO("[i18n] catalog from {}", delivered.string());
+  } else {
+    constexpr auto kCatalog = bd::Embedded("localization.toml");
+    MergeTOML(kCatalog.text(), "localization.toml", g_catalog);
+  }
+
   MergeFile(OverrideFolder() / "localization.toml", g_catalog);
 
   g_loaded = true;

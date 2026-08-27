@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -34,8 +35,8 @@ struct ContentPack {
 //
 // One thread at a time: VFS::Init scans and mounts, and from there the content
 // sync's thread is the only caller. FileSystem carries its own lock, so the
-// mounts are safe to swap under a running game. This object's pack list is
-// not, so reading it from another thread needs a lock first.
+// mounts are safe to swap under a running game, and the pack list carries one
+// of its own.
 class ContentCatalog {
 public:
   void Init(const std::filesystem::path &root, FileSystem &files);
@@ -45,6 +46,9 @@ public:
 
   // 0 when no pack with that id is installed.
   i64 InstalledVersion(std::string_view id) const;
+
+  // The first installed pack holding a file of this name, in id order.
+  std::filesystem::path Find(std::string_view name) const;
 
   // Where a fetch unpacks a pack before it is fit to mount.
   std::filesystem::path StagingDirFor(std::string_view id) const;
@@ -63,8 +67,11 @@ private:
   void Unmount();
   void Discover();
 
+  std::vector<ContentPack> Snapshot() const;
+
   std::filesystem::path root_;
   FileSystem *files_ = nullptr;
+  mutable std::mutex mutex_;
   std::vector<ContentPack> packs_;
   std::vector<std::string> mount_names_;
 };

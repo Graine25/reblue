@@ -24,6 +24,7 @@
 #include <rex/ui/immediate_drawer.h>
 #include <rex/ui/windowed_app_context.h>
 
+#include "core/settings_model.h"
 #include "installer/disc_install.h"
 #include "installer/install_registry.h"
 #include "vfs/vfs.h"
@@ -34,11 +35,22 @@ namespace bd::installer {
 
 void InitInstallerFonts(ImFontAtlas *atlas);
 
+// A row the options page set, named by its catalog key rather than its index
+// so the replay finds it wherever the row sits.
+struct SettingPick {
+  SettingsPage page;
+  const char *label;
+  int option;
+};
+
 // Only a touched row is persisted into the profile config. create_shortcut
 // and reset_config are plain bools rather than optional: unlike the two
 // above, an untouched checkbox means "do nothing," not "leave it alone."
 struct WizardChoices {
-  int quality_preset = -1; // core/settings preset index
+  // The options page writes live so the rows read back what was picked, but
+  // the profile config is loaded after the wizard closes and would overwrite
+  // that. These are replayed once it has.
+  std::vector<SettingPick> settings;
   std::optional<bool> update_check;
   bool create_shortcut = false;
   bool reset_config = false;
@@ -68,16 +80,22 @@ protected:
   void OnDraw(ImGuiIO &io) override;
 
 private:
-  enum class Page { SelectInputs, Installing, RebuildingIndex, Done, AddDLC };
+  // Content is what to install, Options is how it runs. Splitting them is
+  // what keeps either from being a column of stacked boxes.
+  enum class Page { Content, Options, Installing, RebuildingIndex, Done };
 
-  void DrawSelectInputs();
-  void DrawQualityPreset();
-  void DrawDLCSection();
+  void DrawContent();
   void DrawOptions();
+  void DrawDiscs();
+  void DrawDLCSection();
+  void DrawPreferences();
+  void DrawFooter();
+  // Draws the config menu's own row, found by its catalog key.
+  void DrawSettingRow(SettingsPage page, const char *label);
+  void RecordPick(SettingsPage page, const char *label, int option);
   void DrawInstalling();
   void DrawRebuildingIndex();
   void DrawDone();
-  void DrawAddDLC();
 
   void PickISO(int index);
   void PickInstallDir();
@@ -88,7 +106,6 @@ private:
   void Finish(bool completed);
 
   void InitDLCCatalog();
-  void EnterAddDLC();
   void PickAndInstallDLC();
 
   rex::ui::WindowedAppContext &app_context_;
@@ -100,7 +117,7 @@ private:
   std::unique_ptr<rex::ui::ImmediateTexture> background_texture_;
   bool background_tried_ = false;
 
-  Page page_ = Page::SelectInputs;
+  Page page_ = Page::Content;
 
   std::array<std::filesystem::path, kDiscCount> iso_paths_;
   std::array<bool, kDiscCount> iso_valid_ = {};
@@ -114,6 +131,9 @@ private:
   std::string install_status_;
 
   WizardChoices choices_;
+  // Recorded in the install registry, not the profile config: the exe reads it
+  // before any config is loaded.
+  Renderer renderer_ = Renderer::D3D12;
   // Checkbox state, seeded from the live settings.
   bool update_check_ = false;
   bool create_shortcut_ = false;
@@ -127,10 +147,6 @@ private:
   std::atomic<bool> index_rebuild_done_{false};
   std::thread index_rebuild_thread_;
 
-  Page dlc_return_page_ = Page::SelectInputs;
-  // Derived once on entry: DrawAddDLC runs every frame and absolute() is a
-  // working directory syscall.
-  std::filesystem::path dlc_root_;
   struct DlcResult {
     bool ok;
     std::string message;

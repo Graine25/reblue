@@ -7,6 +7,8 @@
  */
 #include "installer/install_registry.h"
 
+#include <string_view>
+
 #include <rex/types.h>
 
 #include "core/build_info.h"
@@ -41,6 +43,19 @@ namespace bd::installer {
 namespace {
 
 constexpr wchar_t kInstallKey[] = L"Software\\Zolaware\\reblue\\Install";
+
+// How Renderer is spelled in the store. Anything else is a record from before
+// the field existed, which means D3D12.
+constexpr const char *kRendererD3D12 = "dx12";
+constexpr const char *kRendererVulkan = "vulkan";
+
+const char *Serialize(Renderer renderer) {
+  return renderer == Renderer::Vulkan ? kRendererVulkan : kRendererD3D12;
+}
+
+Renderer Deserialize(std::string_view text) {
+  return text == kRendererVulkan ? Renderer::Vulkan : Renderer::D3D12;
+}
 
 std::optional<std::wstring> ReadString(HKEY key, const wchar_t *name) {
   DWORD type = 0;
@@ -106,9 +121,8 @@ std::optional<InstallConfig> ReadInstallRegistry() {
     }
   }
 
-  if (auto r = ReadString(key, L"Renderer");
-      r && bd::WideToUtf8(*r) == kRendererVulkan)
-    cfg.renderer = kRendererVulkan;
+  if (auto r = ReadString(key, L"Renderer"))
+    cfg.renderer = Deserialize(bd::WideToUtf8(*r));
 
   if (auto v = ReadString(key, L"AppVersion"))
     cfg.app_version = bd::WideToUtf8(*v);
@@ -148,7 +162,8 @@ bool WriteInstallRegistry(const InstallConfig &config) {
       ok &= WriteString(
           key, (L"Disc" + std::to_wstring(i + 1) + L"Fingerprint").c_str(),
           bd::Utf8ToWide(config.iso_fingerprints[i]));
-    ok &= WriteString(key, L"Renderer", bd::Utf8ToWide(config.renderer));
+    ok &= WriteString(key, L"Renderer",
+                      bd::Utf8ToWide(Serialize(config.renderer)));
     ok &= WriteString(key, L"SchemaVersion",
                       std::to_wstring(kInstallSchemaVersion));
     ok &= WriteString(key, L"AppVersion",
@@ -211,8 +226,6 @@ std::optional<InstallConfig> ReadInstallRegistry() {
           t["disc" + std::to_string(i + 1) + "_fingerprint"].value_or(
               std::string{});
     cfg.schema_version = t["schema_version"].value_or(0);
-    if (t["renderer"].value_or(std::string(kRendererDX12)) == kRendererVulkan)
-      cfg.renderer = kRendererVulkan;
     cfg.app_version = t["app_version"].value_or(std::string{});
   } catch (const toml::parse_error &e) {
     BD_WARN("Install store {} unreadable: {}", path.string(), e.what());
@@ -250,7 +263,6 @@ bool WriteInstallRegistry(const InstallConfig &config) {
   for (int i = 0; i < kDiscCount; ++i)
     t.insert("disc" + std::to_string(i + 1) + "_fingerprint",
              config.iso_fingerprints[i]);
-  t.insert("renderer", config.renderer);
   t.insert("schema_version", static_cast<i64>(kInstallSchemaVersion));
   t.insert("app_version", std::string(REBLUE_VERSION_STRING));
 

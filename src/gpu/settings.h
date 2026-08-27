@@ -200,7 +200,7 @@ private:
   i32 shadowDimension_ = 4096;
   f64 shadowDistance_ = 2.0;
   f64 reflectionUpscale_ = 2.0;
-  i32 aspectRatio_ = 0;
+  i32 aspectRatio_ = static_cast<i32>(AspectMode::Auto);
   i32 fovOffset_ = 0;
   bool vsync_ = true;
   bool psoPrecache_ = true;

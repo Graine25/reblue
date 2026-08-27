@@ -17,13 +17,15 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <string_view>
 
 #include <rex/cvar.h>
+#include <rex/filesystem.h>
 
 #include "engine/engine.h"
-#include "gpu/gpu.h"
+#include "installer/installer.h"
 #include "platform/platform.h"
 #include "ui/ui.h"
 
@@ -497,25 +499,62 @@ int NextEnabledOption(const SettingRow &s, int cur, int dir) {
   return cur;
 }
 
+// A menu row reads its value every frame, so the record is read once and the
+// row's own writes keep this current.
+installer::Renderer &RendererState() {
+  static installer::Renderer state = [] {
+    auto cfg = installer::ReadInstallRegistry();
+    return cfg ? cfg->renderer : installer::Renderer::D3D12;
+  }();
+  return state;
+}
+
 } // namespace
 
-int QualityPresetCount() { return static_cast<int>(gpu::kQualityPresetCount); }
+// Only Windows builds both executables.
+bool RendererChoiceAvailable() {
+#if defined(_WIN32)
+  static const bool available = [] {
+    std::error_code ec;
+    return std::filesystem::exists(
+        rex::filesystem::GetExecutablePath().parent_path() /
+            installer::RendererExecutable(installer::Renderer::Vulkan),
+        ec);
+  }();
+  return available;
+#else
+  return false;
+#endif
+}
 
-const char *QualityPresetName(int preset) {
-  if (preset < 0 || preset > static_cast<int>(gpu::QualityPreset::Custom))
+int RendererCount() { return static_cast<int>(installer::kRendererCount); }
+
+const char *RendererName(int renderer) {
+  if (renderer < 0 || renderer >= RendererCount())
     return "";
-  return Localized(gpu::ToString(static_cast<gpu::QualityPreset>(preset)));
+  return Localized(
+      installer::ToString(static_cast<installer::Renderer>(renderer)));
 }
 
-int CurrentQualityPreset() {
-  return static_cast<int>(gpu::Settings::Get().QualityPreset());
-}
+int CurrentRenderer() { return static_cast<int>(RendererState()); }
 
-bool ApplyQualityPreset(int preset) {
-  if (preset < 0 || preset >= QualityPresetCount())
+bool ApplyRenderer(int renderer) {
+  if (renderer < 0 || renderer >= RendererCount())
     return false;
-  return gpu::Settings::Get().SetQualityPreset(
-      static_cast<gpu::QualityPreset>(preset));
+  const auto wanted = static_cast<installer::Renderer>(renderer);
+  if (wanted == RendererState())
+    return true;
+
+  auto cfg = installer::ReadInstallRegistry();
+  if (!cfg) {
+    BD_WARN("[backend] no install record, renderer choice not saved");
+    return false;
+  }
+  cfg->renderer = wanted;
+  if (!installer::WriteInstallRegistry(*cfg))
+    return false;
+  RendererState() = wanted;
+  return true;
 }
 
 const char *SettingsPageLabel(SettingsPage page) {
@@ -528,6 +567,19 @@ size_t SettingsCount(SettingsPage page) {
   for (int i = 0; i < table.count; ++i)
     n += Shown(table.items[i]) ? 1 : 0;
   return n;
+}
+
+int SettingsFindRow(SettingsPage page, const char *label) {
+  const auto &table = Table(page);
+  int index = 0;
+  for (int i = 0; i < table.count; ++i) {
+    if (!Shown(table.items[i]))
+      continue;
+    if (std::strcmp(table.items[i].label, label) == 0)
+      return index;
+    ++index;
+  }
+  return -1;
 }
 
 size_t SettingsSlotCount(SettingsPage page) {

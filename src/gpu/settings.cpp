@@ -129,7 +129,8 @@ REXCVAR_DEFINE_DOUBLE(bd_shadow_distance, 2.0, kCvarGroup,
       return rex::cvar::ParseDouble(v, d) && std::isfinite(d);
     });
 
-REXCVAR_DEFINE_INT32(bd_aspect_ratio, 0, kCvarGroup,
+REXCVAR_DEFINE_INT32(bd_aspect_ratio,
+                     static_cast<i32>(bd::gpu::AspectMode::Auto), kCvarGroup,
                      "Output aspect ratio: 0 = 16:9, 1 = 4:3, 2 = 16:10, "
                      "3 = 21:9, 4 = 32:9, 5 = match the display, 6 = fill the "
                      "display and stretch.")

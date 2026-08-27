@@ -71,6 +71,29 @@ namespace {
 std::filesystem::path ProgramDir() {
   return rex::filesystem::GetExecutablePath().parent_path();
 }
+
+constexpr bd::installer::Renderer kBuiltRenderer =
+#if defined(REBLUE_D3D12)
+    bd::installer::Renderer::D3D12;
+#else
+    bd::installer::Renderer::Vulkan;
+#endif
+
+// True once the sibling has taken over and this process should quit. One hop:
+// the exe it starts is the one the record names, so it hands off to nobody.
+bool HandOffRenderer(bd::installer::Renderer wanted,
+                     const std::filesystem::path &install_root) {
+  if (wanted == kBuiltRenderer)
+    return false;
+  const auto sibling = install_root / bd::installer::RendererExecutable(wanted);
+  std::error_code ec;
+  if (std::filesystem::exists(sibling, ec) &&
+      bd::platform::SpawnReplacement(sibling, false))
+    return true;
+  BD_WARN("[backend] {} unavailable, staying on this renderer",
+          sibling.filename().string());
+  return false;
+}
 #endif
 
 SDL_Window *MainWindow() {
@@ -547,20 +570,13 @@ void ReblueApp::OnConfigurePaths(rex::PathConfig &paths) {
       return;
     }
   }
-#endif
 
-#if defined(_WIN32) && defined(REBLUE_D3D12)
-  // An install configured for Vulkan hands off to its sibling here, before any
-  // device exists. reblue_vk.exe lacks this block and so never hands back.
+  // Before any device exists: the exe that keeps the session is the one that
+  // creates one.
   if (auto cfg = bd::installer::ReadInstallRegistry();
-      cfg && cfg->renderer == bd::installer::kRendererVulkan) {
-    const auto vk = install_root_ / "reblue_vk.exe";
-    if (std::filesystem::exists(vk, ec) &&
-        bd::platform::SpawnReplacement(vk, false)) {
-      app_context().QuitFromUIThread();
-      return;
-    }
-    BD_WARN("[backend] vulkan requested, staying on D3D12");
+      cfg && HandOffRenderer(cfg->renderer, install_root_)) {
+    app_context().QuitFromUIThread();
+    return;
   }
 #endif
 }
@@ -845,19 +861,6 @@ void ReblueApp::FinishInstaller(rex::PathConfig defaults,
   for (int i = 0; i < bd::installer::kDiscCount; ++i)
     BD_INFO("  disc{} hash:     {}", i + 1, cfg.iso_fingerprints[i]);
 
-#if defined(_WIN32)
-  if (ProgramDir() != install_root_) {
-    if (!bd::platform::SpawnReplacement(install_root_ / "reblue.exe", false)) {
-      bd::platform::ShowFatalError(
-          "Install finished, could not start it",
-          "The game is installed. Run reblue.exe from\n" +
-              install_root_.string());
-    }
-    app_context().QuitFromUIThread();
-    return;
-  }
-#endif
-
   profile_root_ = install_root_ / "profiles" / active_profile_;
   std::error_code ec;
   std::filesystem::create_directories(profile_root_, ec);
@@ -867,7 +870,7 @@ void ReblueApp::FinishInstaller(rex::PathConfig defaults,
   // Nothing else writes this file before the guest boots. A profile config that
   // was not the one loaded this session is read back first, so saving keeps the
   // settings it already held.
-  if (choices.reset_config || choices.quality_preset >= 0 ||
+  if (choices.reset_config || !choices.settings.empty() ||
       choices.update_check.has_value()) {
     const auto profile_cfg = bd::platform::ConfigFilePath();
     if (choices.reset_config) {
@@ -875,19 +878,47 @@ void ReblueApp::FinishInstaller(rex::PathConfig defaults,
     } else if (std::filesystem::exists(profile_cfg, ec)) {
       rex::cvar::LoadConfig(profile_cfg);
     }
-    if (choices.quality_preset >= 0)
-      bd::ApplyQualityPreset(choices.quality_preset);
+    // After the load, not before: it would otherwise put back whatever the
+    // rows held when the wizard opened.
+    for (const auto &pick : choices.settings) {
+      const int row = bd::SettingsFindRow(pick.page, pick.label);
+      if (row >= 0)
+        bd::SetSelectedOption(pick.page, row, pick.option);
+    }
     if (choices.update_check.has_value())
       bd::Settings::Get().SetUpdateCheck(*choices.update_check);
     rex::cvar::SaveConfig(profile_cfg);
   }
 
+#if defined(_WIN32)
   if (choices.create_shortcut) {
     std::string shortcut_error;
-    if (!bd::platform::CreateDesktopShortcut(install_root_ / "reblue.exe",
-                                             "re:Blue", shortcut_error))
+    if (!bd::platform::CreateDesktopShortcut(
+            install_root_ / bd::installer::RendererExecutable(cfg.renderer),
+            "re:Blue", shortcut_error))
       BD_WARN("Could not create the desktop shortcut: {}", shortcut_error);
   }
+
+  // What boots the game is the exe sitting in the install directory built for
+  // the backend that was picked, which is not always this one and not always
+  // here. Everything above has to be written before the hand-off: what starts
+  // next reads it back.
+  if (ProgramDir() != install_root_) {
+    const char *exe = bd::installer::RendererExecutable(cfg.renderer);
+    if (!bd::platform::SpawnReplacement(install_root_ / exe, false)) {
+      bd::platform::ShowFatalError("Install finished, could not start it",
+                                   std::string("The game is installed. Run ") +
+                                       exe + " from\n" +
+                                       install_root_.string());
+    }
+    app_context().QuitFromUIThread();
+    return;
+  }
+  if (HandOffRenderer(cfg.renderer, install_root_)) {
+    app_context().QuitFromUIThread();
+    return;
+  }
+#endif
 
   rex::PathConfig paths = defaults;
   paths.game_data_root = cfg.game_data_path();

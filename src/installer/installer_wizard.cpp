@@ -12,6 +12,7 @@
 #include <stb_image.h>
 
 #include <algorithm>
+#include <cstring>
 #include <functional>
 
 #include "core/app_root.h"
@@ -75,10 +76,10 @@ InstallerWizard::InstallerWizard(
   // user can finish (Done) and boot without re-selecting the DVDs.
   if (existing) {
     iso_fingerprints_ = existing->iso_fingerprints;
+    renderer_ = existing->renderer;
   }
 
-  if (repair_)
-    InitDLCCatalog();
+  InitDLCCatalog();
 }
 
 InstallerWizard::~InstallerWizard() {
@@ -98,6 +99,7 @@ void InstallerWizard::Finish(bool completed) {
   InstallConfig cfg;
   cfg.install_root = std::filesystem::absolute(install_dir_);
   cfg.iso_fingerprints = iso_fingerprints_;
+  cfg.renderer = renderer_;
 
   BD_INFO("InstallerWizard: finished, completed={}", completed);
 
@@ -162,6 +164,8 @@ void InstallerWizard::PickInstallDir() {
     return;
   install_dir_ = *picked;
   install_status_.clear();
+  // The store lives under the install root, so the picker has to follow it.
+  InitDLCCatalog();
 }
 
 void InstallerWizard::StartInstall() {
@@ -259,15 +263,25 @@ void InstallerWizard::OnDraw(ImGuiIO &) {
           reinterpret_cast<ImTextureID>(background_texture_.get()), p0, p1);
     }
 
-    // Dark panel keeps controls readable over the background image.
-    const float panel_width = 760.0f;
-    const float panel_margin = 32.0f;
-    ImGui::SetCursorPos(ImVec2(panel_margin, panel_margin));
+    // Dark panel keeps controls readable over the background image. Wide
+    // enough for a row of values to sit beside its label, and never wider than
+    // the window it is drawn in.
+    constexpr float kPanelMaxWidth = 1040.0f;
+    constexpr float kPanelMinWidth = 420.0f;
+    constexpr float kPanelMargin = 32.0f;
+    const float panel_width =
+        std::clamp(vp->WorkSize.x - kPanelMargin * 2.0f, kPanelMinWidth,
+                   kPanelMaxWidth);
+    ImGui::SetCursorPos(ImVec2(kPanelMargin, kPanelMargin));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, bd::ui::Theme::kPanel);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14, 7));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 8));
+    // Auto-height, but a page taller than the window scrolls rather than
+    // running off the bottom of it.
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(0, 0), ImVec2(FLT_MAX, vp->WorkSize.y - kPanelMargin * 2.0f));
     if (ImGui::BeginChild("##installer_panel", ImVec2(panel_width, 0),
                           ImGuiChildFlags_AutoResizeY |
                               ImGuiChildFlags_AlwaysUseWindowPadding,
@@ -275,8 +289,11 @@ void InstallerWizard::OnDraw(ImGuiIO &) {
       if (g_body_font)
         ImGui::PushFont(g_body_font);
       switch (page_) {
-      case Page::SelectInputs:
-        DrawSelectInputs();
+      case Page::Content:
+        DrawContent();
+        break;
+      case Page::Options:
+        DrawOptions();
         break;
       case Page::Installing:
         DrawInstalling();
@@ -286,9 +303,6 @@ void InstallerWizard::OnDraw(ImGuiIO &) {
         break;
       case Page::Done:
         DrawDone();
-        break;
-      case Page::AddDLC:
-        DrawAddDLC();
         break;
       }
       if (g_body_font)
@@ -313,12 +327,7 @@ void DrawTitle(const char *text) {
 void SectionHeader(const char *text) {
   ImGui::TextUnformatted(text);
   ImGui::Separator();
-}
-
-void CenterInColumn(float item_width) {
-  const float offset = (ImGui::GetContentRegionAvail().x - item_width) * 0.5f;
-  if (offset > 0.0f)
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
+  ImGui::Spacing();
 }
 
 void DrawSpinner() {
@@ -389,9 +398,62 @@ void DirectoryRow(const char *heading, const char *sublabel,
     ImGui::PopFont();
   ImGui::PopID();
 }
+
+// The label column on the Options page. Wide enough for the longest row label
+// the catalog carries, so every value strip on the page starts at one x.
+constexpr float kLabelColumn = 190.0f;
+
+bool BeginRows(const char *id) {
+  if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingFixedFit))
+    return false;
+  ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed,
+                          kLabelColumn);
+  ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
+  return true;
+}
+
+// The width every row's dropdown gets, off the longest value any of them
+// offers. Uniform, so the page reads as one column of controls.
+constexpr float kValueWidth = 200.0f;
+
+// One Options row: its label, then its values in a dropdown. Whether the
+// config model drives the row or the wizard holds the value itself is the
+// caller's business, so both line up.
+void OptionRow(const char *label, int count, int selected,
+               const std::function<const char *(int)> &text,
+               const std::function<bool(int)> &disabled,
+               const std::function<void(int)> &pick) {
+  if (count <= 0)
+    return;
+  // Rows share value names ("Auto" is both a resolution and an aspect ratio),
+  // so the row's own label is what keeps their widgets distinct.
+  ImGui::PushID(label);
+  ImGui::TableNextRow();
+  ImGui::TableSetColumnIndex(0);
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextUnformatted(label);
+  ImGui::TableSetColumnIndex(1);
+
+  const char *current = selected >= 0 && selected < count ? text(selected) : "";
+  ImGui::SetNextItemWidth(kValueWidth);
+  if (ImGui::BeginCombo("##value", current)) {
+    for (int i = 0; i < count; ++i) {
+      ImGui::PushID(i);
+      ImGui::BeginDisabled(disabled && disabled(i));
+      if (ImGui::Selectable(text(i), i == selected))
+        pick(i);
+      ImGui::EndDisabled();
+      if (i == selected)
+        ImGui::SetItemDefaultFocus();
+      ImGui::PopID();
+    }
+    ImGui::EndCombo();
+  }
+  ImGui::PopID();
+}
 } // namespace
 
-void InstallerWizard::DrawSelectInputs() {
+void InstallerWizard::DrawContent() {
   DrawTitle(T(repair_ ? "installer.title.repair" : "installer.title.main"));
   ImGui::Spacing();
 
@@ -400,73 +462,134 @@ void InstallerWizard::DrawSelectInputs() {
     ImGui::Spacing();
   }
 
-  SectionHeader(T("installer.section.sources"));
-  const ImGuiTableFlags flags =
-      ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoBordersInBody;
-  if (ImGui::BeginTable("##inputs", 3, flags)) {
-    ImGui::TableSetupColumn("##btn", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-    ImGui::TableSetupColumn("##path", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("##status", ImGuiTableColumnFlags_WidthFixed,
-                            100.0f);
+  DrawDiscs();
 
-    for (int i = 0; i < kDiscCount; ++i) {
-      ImGui::PushID(i);
-      ImGui::TableNextRow();
-
-      ImGui::TableSetColumnIndex(0);
-      const std::string btn =
-          i18n::Fmt("installer.button.select_disc", kDiscLabels[i]);
-      if (ImGui::Button(btn.c_str(), ImVec2(-FLT_MIN, 0)))
-        PickISO(i);
-
-      ImGui::TableSetColumnIndex(1);
-      FilenameCell(iso_paths_[i]);
-
-      ImGui::TableSetColumnIndex(2);
-      if (!iso_status_[i].empty()) {
-        const ImVec4 color = iso_valid_[i] ? ImVec4(0.3f, 0.9f, 0.3f, 1.0f)
-                                           : ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
-        ImGui::TextColored(color, "%s", iso_status_[i].c_str());
-      }
-
-      ImGui::PopID();
-    }
-    ImGui::EndTable();
-  }
-
-  if (repair_) {
-    ImGui::Spacing();
-    ImGui::BeginDisabled(!InputsReady());
-    if (ImGui::Button(T("installer.button.repair"), ImVec2(120, 0)))
-      StartInstall();
-    ImGui::EndDisabled();
-  }
-
-  ImGui::Dummy(ImVec2(0, 8));
-  SectionHeader(T("installer.section.languages"));
+  // The codes the discs carry, directly under the discs carrying them. Ten
+  // abbreviations lit or dim say what a heading over them would.
   std::set<std::string> detected;
   for (const auto &s : iso_languages_)
     detected.insert(s.begin(), s.end());
+  ImGui::Dummy(ImVec2(0, 2));
   DrawLanguageLights(detected);
 
-  ImGui::Dummy(ImVec2(0, 12));
+  ImGui::Dummy(ImVec2(0, 10));
   SectionHeader(T("installer.section.install_dir"));
   DirectoryRow(T("installer.install_location"),
                T(repair_ ? "installer.hint.existing" : "installer.hint.space"),
                install_dir_, "install_dir", [this]() { PickInstallDir(); });
 
-  if (repair_) {
-    ImGui::Dummy(ImVec2(0, 12));
-    DrawDLCSection();
-  } else {
-    ImGui::Dummy(ImVec2(0, 12));
-    DrawQualityPreset();
+  ImGui::Dummy(ImVec2(0, 10));
+  DrawDLCSection();
+  DrawFooter();
+}
+
+void InstallerWizard::DrawDiscs() {
+  SectionHeader(T("installer.section.sources"));
+
+  const ImGuiTableFlags flags =
+      ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoBordersInBody;
+  if (!ImGui::BeginTable("##inputs", 3, flags))
+    return;
+  ImGui::TableSetupColumn("##btn", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+  ImGui::TableSetupColumn("##path", ImGuiTableColumnFlags_WidthStretch);
+  ImGui::TableSetupColumn("##status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+
+  for (int i = 0; i < kDiscCount; ++i) {
+    ImGui::PushID(i);
+    ImGui::TableNextRow();
+
+    ImGui::TableSetColumnIndex(0);
+    const std::string btn =
+        i18n::Fmt("installer.button.select_disc", kDiscLabels[i]);
+    if (ImGui::Button(btn.c_str(), ImVec2(-FLT_MIN, 0)))
+      PickISO(i);
+
+    ImGui::TableSetColumnIndex(1);
+    ImGui::AlignTextToFramePadding();
+    FilenameCell(iso_paths_[i]);
+
+    ImGui::TableSetColumnIndex(2);
+    if (!iso_status_[i].empty()) {
+      const ImVec4 color = iso_valid_[i] ? ImVec4(0.3f, 0.9f, 0.3f, 1.0f)
+                                         : ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextColored(color, "%s", iso_status_[i].c_str());
+    }
+
+    ImGui::PopID();
+  }
+  ImGui::EndTable();
+}
+
+void InstallerWizard::DrawOptions() {
+  DrawTitle(T("installer.title.options"));
+  ImGui::Spacing();
+
+  SectionHeader(T("installer.section.display"));
+  if (BeginRows("##display_rows")) {
+    // The wizard holds the backend itself: it goes in the install record, and
+    // on a fresh install there is no record for the config row to write to.
+    if (bd::RendererChoiceAvailable()) {
+      OptionRow(
+          T("settings.graphics.backend.label"), bd::RendererCount(),
+          static_cast<int>(renderer_),
+          [](int i) { return bd::RendererName(i); }, nullptr,
+          [this](int i) { renderer_ = static_cast<Renderer>(i); });
+    }
+    DrawSettingRow(SettingsPage::Display,
+                   "settings.display.display_mode.label");
+    DrawSettingRow(SettingsPage::Display, "settings.display.resolution.label");
+    DrawSettingRow(SettingsPage::Display,
+                   "settings.display.aspect_ratio.label");
+    ImGui::EndTable();
   }
 
-  ImGui::Dummy(ImVec2(0, 12));
-  DrawOptions();
+  ImGui::Dummy(ImVec2(0, 6));
+  SectionHeader(T("installer.section.graphics"));
+  if (BeginRows("##graphics_rows")) {
+    DrawSettingRow(SettingsPage::Graphics,
+                   "settings.graphics.quality_preset.label");
+    DrawSettingRow(SettingsPage::Graphics,
+                   "settings.graphics.anti_aliasing.label");
+    DrawSettingRow(SettingsPage::Graphics, "settings.graphics.aa_level.label");
+    ImGui::EndTable();
+  }
 
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0, 6));
+  DrawPreferences();
+  DrawFooter();
+}
+
+void InstallerWizard::DrawSettingRow(SettingsPage page, const char *label) {
+  const int row = bd::SettingsFindRow(page, label);
+  if (row < 0)
+    return;
+  OptionRow(
+      bd::SettingsLabel(page, row), bd::SettingsOptionCount(page, row),
+      bd::SettingsSelectedOption(page, row),
+      [page, row](int i) { return bd::SettingsOptionText(page, row, i); },
+      [page, row](int i) { return bd::SettingsOptionDisabled(page, row, i); },
+      [this, page, row, label](int i) {
+        if (bd::SetSelectedOption(page, row, i))
+          RecordPick(page, label, i);
+      });
+}
+
+void InstallerWizard::RecordPick(SettingsPage page, const char *label,
+                                 int option) {
+  // One entry per row, appended where the newest pick is: a preset writes the
+  // rows below it, so replaying in the order they were picked is what keeps a
+  // later choice from being undone by an earlier one.
+  std::erase_if(choices_.settings, [&](const SettingPick &p) {
+    return p.page == page && std::strcmp(p.label, label) == 0;
+  });
+  choices_.settings.push_back({page, label, option});
+}
+
+// The way back sits at the far left, the way on at the far right, so the two
+// edges of the panel are the two directions through it.
+void InstallerWizard::DrawFooter() {
+  ImGui::Dummy(ImVec2(0, 6));
   ImGui::Separator();
   ImGui::Spacing();
 
@@ -476,48 +599,45 @@ void InstallerWizard::DrawSelectInputs() {
     ImGui::Spacing();
   }
 
-  if (repair_) {
-    // Existing install: rebuild the pack index and boot without re-selecting
-    // discs.
-    if (ImGui::Button(T("installer.button.done"), ImVec2(120, 0)))
-      StartIndexRebuild();
-  } else {
-    ImGui::BeginDisabled(!InputsReady());
-    if (ImGui::Button(T("installer.button.install"), ImVec2(120, 0)))
-      StartInstall();
-    ImGui::EndDisabled();
+  constexpr float kButtonWidth = 130.0f;
+  constexpr float kGap = 8.0f;
+  constexpr ImVec2 kButton(kButtonWidth, 0);
+
+  // The first page has nothing to go back to, so its left edge is the way out
+  // of the wizard instead.
+  if (page_ == Page::Content) {
+    if (ImGui::Button(T("installer.button.exit"), kButton))
+      Finish(false);
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         ImGui::GetContentRegionAvail().x - kButtonWidth);
+    if (ImGui::Button(T("installer.button.next"), kButton))
+      page_ = Page::Options;
+    return;
   }
+
+  if (ImGui::Button(T("installer.button.back"), kButton))
+    page_ = Page::Content;
+
+  // Repair mode offers one more way on: an install whose discs still check out
+  // can boot without copying anything.
+  const int forward = repair_ ? 2 : 1;
   ImGui::SameLine();
-  if (ImGui::Button(T("installer.button.cancel"), ImVec2(120, 0)))
-    Finish(false);
-}
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                       ImGui::GetContentRegionAvail().x -
+                       forward * kButtonWidth - (forward - 1) * kGap);
 
-// Quality tier row: writes the same cvar bundle as the in-game settings menu's
-// "Quality Preset". The highlighted tier is read back from the live cvars, so
-// nothing is highlighted while they match no tier ("Custom").
-void InstallerWizard::DrawQualityPreset() {
-  SectionHeader(T("installer.section.quality"));
-
-  const int current = bd::CurrentQualityPreset();
-  const int count = bd::QualityPresetCount();
-  for (int i = 0; i < count; ++i) {
-    if (i)
-      ImGui::SameLine(0, 8);
-    const bool selected = i == current;
-    if (selected) {
-      ImGui::PushStyleColor(ImGuiCol_Button, bd::ui::Theme::kAccentSelected);
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                            bd::ui::Theme::kAccentSelected);
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                            bd::ui::Theme::kAccentSelected);
-    }
-    if (ImGui::Button(bd::QualityPresetName(i), ImVec2(120, 0))) {
-      bd::ApplyQualityPreset(i);
-      choices_.quality_preset = i;
-    }
-    if (selected)
-      ImGui::PopStyleColor(3);
+  if (repair_) {
+    if (ImGui::Button(T("installer.button.done"), kButton))
+      StartIndexRebuild();
+    ImGui::SameLine(0, kGap);
   }
+  ImGui::BeginDisabled(!InputsReady());
+  if (ImGui::Button(T(repair_ ? "installer.button.repair"
+                              : "installer.button.install"),
+                    kButton))
+    StartInstall();
+  ImGui::EndDisabled();
 }
 
 void InstallerWizard::DrawDLCSection() {
@@ -528,48 +648,36 @@ void InstallerWizard::DrawDLCSection() {
   if (count == 0) {
     ImGui::TextDisabled("%s", T("installer.dlc.none"));
   } else {
-    const char *enabled_label = T("installer.dlc.enabled");
     const char *remove_label = T("installer.dlc.remove");
     const float remove_width = ImGui::CalcTextSize(remove_label).x +
-                               ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float remove_column_width = std::max(90.0f, remove_width + 20.0f);
+                               ImGui::GetStyle().FramePadding.x * 2.0f + 16.0f;
 
-    const ImGuiTableFlags flags =
-        ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoBordersInBody;
-    if (ImGui::BeginTable("##dlc", 3, flags)) {
+    // A checkbox against a name says what the column headings used to, so the
+    // rows carry nothing over them.
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0, 5));
+    if (ImGui::BeginTable("##dlc", 3,
+                          ImGuiTableFlags_SizingFixedFit |
+                              ImGuiTableFlags_NoBordersInBody)) {
+      ImGui::TableSetupColumn("##on", ImGuiTableColumnFlags_WidthFixed,
+                              ImGui::GetFrameHeight());
       ImGui::TableSetupColumn("##name", ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableSetupColumn("##enabled", ImGuiTableColumnFlags_WidthFixed,
-                              80.0f);
       ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed,
-                              remove_column_width);
-
-      // TableHeadersRow() draws each column's label at the cursor it starts
-      // with and cannot be pre-offset, so the row is built by hand to center
-      // the fixed columns' labels over their cells.
-      ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-      ImGui::TableSetColumnIndex(0);
-      ImGui::TableHeader(T("installer.dlc.name"));
-      ImGui::TableSetColumnIndex(1);
-      CenterInColumn(ImGui::CalcTextSize(enabled_label).x);
-      ImGui::TableHeader(enabled_label);
-      ImGui::TableSetColumnIndex(2);
-      ImGui::TableHeader("");
+                              remove_width);
 
       for (size_t i = 0; i < count; ++i) {
         ImGui::PushID(static_cast<int>(i));
         ImGui::TableNextRow();
 
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextUnformatted(dlc.At(i).display_name.c_str());
-
-        ImGui::TableSetColumnIndex(1);
         bool enabled = dlc.IsEnabled(i);
-        CenterInColumn(ImGui::GetFrameHeight());
         if (ImGui::Checkbox("##enabled", &enabled))
           dlc.SetEnabled(i, enabled);
 
+        ImGui::TableSetColumnIndex(1);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(dlc.At(i).display_name.c_str());
+
         ImGui::TableSetColumnIndex(2);
-        CenterInColumn(remove_width);
         if (ImGui::Button(remove_label, ImVec2(remove_width, 0))) {
           const std::string name = dlc.At(i).display_name;
           dlc.Remove(i);
@@ -584,6 +692,7 @@ void InstallerWizard::DrawDLCSection() {
       }
       ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
   }
 
   ImGui::Spacing();
@@ -602,8 +711,8 @@ void InstallerWizard::DrawDLCSection() {
 
 // The URL sits under the checkbox so a person turning this on can see where
 // the build is about to call.
-void InstallerWizard::DrawOptions() {
-  SectionHeader(T("installer.section.options"));
+void InstallerWizard::DrawPreferences() {
+  SectionHeader(T("installer.section.preferences"));
 
   if (ImGui::Checkbox(T("installer.update_check"), &update_check_)) {
     choices_.update_check = update_check_;
@@ -673,7 +782,8 @@ void InstallerWizard::DrawInstalling() {
       install_thread_.join();
     if (progress_.canceled.load()) {
       install_status_ = i18n::Text("installer.canceled_notice");
-      page_ = Page::SelectInputs;
+      // Back to the page the Install button is on, not to the first one.
+      page_ = Page::Options;
     } else if (progress_.failed.load()) {
       done_success_ = false;
       done_message_ = i18n::Fmt("installer.done.failed", progress_.GetError());
@@ -708,9 +818,6 @@ void InstallerWizard::DrawDone() {
   if (done_success_) {
     if (ImGui::Button(T("installer.button.continue"), ImVec2(120, 0)))
       Finish(true);
-    ImGui::SameLine();
-    if (ImGui::Button(T("installer.button.add_dlc"), ImVec2(120, 0)))
-      EnterAddDLC();
   } else {
     if (ImGui::Button(T("installer.button.quit"), ImVec2(120, 0)))
       Finish(false);
@@ -724,17 +831,9 @@ void InstallerWizard::InitDLCCatalog() {
   // against default settings, not the profile's, and do so on the UI thread.
   const bd::vfs::Paths paths(std::filesystem::absolute(install_dir_) / "game",
                              {});
-  dlc_root_ = paths.DLC();
   auto &dlc = bd::vfs::VFS::Get().DLC();
-  dlc.Init(dlc_root_);
+  dlc.Init(paths.DLC());
   dlc.Reload();
-}
-
-void InstallerWizard::EnterAddDLC() {
-  dlc_return_page_ = page_;
-  dlc_results_.clear();
-  InitDLCCatalog();
-  page_ = Page::AddDLC;
 }
 
 void InstallerWizard::PickAndInstallDLC() {
@@ -761,51 +860,6 @@ void InstallerWizard::PickAndInstallDLC() {
   }
   dlc_results_.push_back(
       {true, i18n::Fmt("installer.dlc.added", validation.display_name)});
-}
-
-void InstallerWizard::DrawAddDLC() {
-  DrawTitle(T("installer.dlc.title"));
-  ImGui::Spacing();
-
-  SectionHeader(T("installer.install_location"));
-  if (g_path_font)
-    ImGui::PushFont(g_path_font);
-  ImGui::TextWrapped("%s", dlc_root_.string().c_str());
-  if (g_path_font)
-    ImGui::PopFont();
-  ImGui::Spacing();
-
-  if (ImGui::Button(T("installer.dlc.add_file"), ImVec2(160, 0)))
-    PickAndInstallDLC();
-
-  ImGui::Dummy(ImVec2(0, 8));
-  SectionHeader(T("installer.dlc.installed"));
-  auto &dlc = bd::vfs::VFS::Get().DLC();
-  const size_t dlc_count = dlc.Count();
-  if (dlc_count == 0) {
-    ImGui::TextDisabled("%s", T("installer.dlc.none"));
-  } else {
-    for (size_t i = 0; i < dlc_count; ++i)
-      ImGui::BulletText("%s", dlc.At(i).display_name.c_str());
-  }
-
-  if (!dlc_results_.empty()) {
-    ImGui::Dummy(ImVec2(0, 8));
-    SectionHeader(T("installer.dlc.results"));
-    for (const auto &r : dlc_results_) {
-      const ImVec4 col = r.ok ? ImVec4(0.30f, 0.90f, 0.30f, 1.0f)
-                              : ImVec4(0.90f, 0.40f, 0.30f, 1.0f);
-      ImGui::TextColored(col, "%s", r.message.c_str());
-    }
-  }
-
-  ImGui::Spacing();
-  ImGui::Separator();
-  ImGui::Spacing();
-  if (ImGui::Button(T("installer.button.back"), ImVec2(120, 0))) {
-    dlc_results_.clear();
-    page_ = dlc_return_page_;
-  }
 }
 
 } // namespace bd::installer

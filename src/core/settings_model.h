@@ -38,14 +38,14 @@ enum class RowUi : int {
 
 enum class SettingAction { None, Keybinds, PadLayout, MechatLayout };
 
-// Quality presets (the Graphics page's "Quality Preset" row), also used by the
-// first-run installer to seed a tier before the game boots. Indices 0..count-1
-// are the real tiers. CurrentQualityPreset returns count ("Custom") when the
-// live cvars match no tier.
-int QualityPresetCount();
-const char *QualityPresetName(int preset);
-int CurrentQualityPreset();
-bool ApplyQualityPreset(int preset);
+// The backend the next launch renders through, for the Graphics page's
+// "Rendering Backend" row and the installer's buttons. It lives in the install
+// record, not the profile config: the exe reads it before any config loads.
+bool RendererChoiceAvailable();
+int RendererCount();
+const char *RendererName(int renderer);
+int CurrentRenderer();
+bool ApplyRenderer(int renderer);
 
 const char *SettingsPageLabel(SettingsPage page);
 
@@ -55,6 +55,11 @@ const char *SettingsPageLabel(SettingsPage page);
 // filtering by the caller.
 size_t SettingsCount(SettingsPage page);
 const char *SettingsLabel(SettingsPage page, int index);
+
+// The visible index of the row carrying this label key, or -1 when the page
+// does not have it or the locale dropped it. Lets a surface outside the config
+// menu name the rows it wants instead of holding positions that move.
+int SettingsFindRow(SettingsPage page, const char *label);
 
 // A page is drawn as titled sections, the way the keybind screen groups its
 // binds. A slot is a position in the drawn list: a section title takes one of

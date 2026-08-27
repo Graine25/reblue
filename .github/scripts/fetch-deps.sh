@@ -25,6 +25,7 @@ if [ ! -d "sdk/${SDK_SLICE}" ]; then
 fi
 echo "Extracted $(basename "${url}") to sdk/${SDK_SLICE}"
 
+rm -rf assets
 git clone --depth 1 \
   "https://x-access-token:${ASSETS_TOKEN}@github.com/${ASSETS_REPO}.git" assets
 git -C assets remote set-url origin "https://github.com/${ASSETS_REPO}.git"

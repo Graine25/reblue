@@ -251,6 +251,13 @@ std::string DescribeBackend(plume::RenderDevice *device) {
   auto *dev = static_cast<plume::VulkanDevice *>(device);
   if (!dev)
     return "Vulkan";
+#if defined(__APPLE__)
+  const u32 drv = dev->physicalDeviceProperties.driverVersion;
+  const u32 mvk_major = drv / 10000, mvk_minor = (drv / 100) % 100,
+            mvk_patch = drv % 100;
+  if (mvk_major >= 1 && mvk_major <= 9)
+    return std::format("MoltenVK {}.{}.{}", mvk_major, mvk_minor, mvk_patch);
+#endif
   // The physical device's own version, not the 1.2 plume asks the instance for:
   // this is the number a driver bug report needs.
   const u32 v = dev->physicalDeviceProperties.apiVersion;

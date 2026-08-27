@@ -67,9 +67,11 @@ REXCVAR_DEFINE_STRING(
 
 namespace {
 
+#if defined(_WIN32)
 std::filesystem::path ProgramDir() {
   return rex::filesystem::GetExecutablePath().parent_path();
 }
+#endif
 
 SDL_Window *MainWindow() {
   int count = 0;
@@ -517,6 +519,7 @@ void ReblueApp::OnConfigurePaths(rex::PathConfig &paths) {
   paths.config_path = profile_cfg;
   bd::platform::SetProfileContext(active_profile_, profile_cfg);
 
+#if defined(_WIN32)
   const auto program_dir = ProgramDir();
   if (program_dir != install_root_) {
     const auto warning =
@@ -530,7 +533,6 @@ void ReblueApp::OnConfigurePaths(rex::PathConfig &paths) {
       bd::platform::ShowWarning("re:Blue", warning);
   }
 
-#if defined(_WIN32)
   // A build-dir exe run against this install is not part of it, so swapping
   // release binaries in under it would strand the debugger on the wrong image.
   if (program_dir == install_root_) {

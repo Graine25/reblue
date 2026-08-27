@@ -50,8 +50,6 @@ void Updates::Start() {
   rex::cvar::RegisterChangeCallback(
       "bd_update_channel",
       [this](std::string_view, std::string_view) { BeginCheck(); });
-
-  BeginCheck();
 }
 
 void Updates::BeginCheck() {
@@ -133,11 +131,13 @@ void Updates::Check(const std::string &url) {
   }
 
   generation_.fetch_add(1);
-  stage_.store(Stage::kDone);
 
   // Packs carry their own versions and their own document, so this runs
-  // whether or not the app itself has an update waiting.
+  // whether or not the app itself has an update waiting. Before the stage
+  // lands, which is when whatever waits on this check reads the content one.
   ContentSync::Get().Start(content_url);
+
+  stage_.store(Stage::kDone);
 }
 
 Updates::ApplyStage Updates::ApplyState() const { return apply_stage_.load(); }

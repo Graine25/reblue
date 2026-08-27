@@ -21,6 +21,10 @@ REX_IMPORT(__imp__SelMesWinTask_Create, CreateSelMes, u32(u32, u32));
 REX_IMPORT(__imp__SelMesWinConfig_Init, InitSelMesConfig, void(u32));
 REX_IMPORT(__imp__SelMesWinConfig_LoadStrings, LoadSelMesStrings,
            void(u32, u32, u32));
+REX_IMPORT(__imp__NormMesWinTask_Create, CreateNormMes, u32(u32, u32));
+REX_IMPORT(__imp__NormMesWinConfig_Init, InitNormMesConfig, void(u32));
+REX_IMPORT(__imp__NormMesWinConfig_LoadStrings, LoadNormMesStrings,
+           void(u32, u32, u32));
 
 namespace {
 
@@ -44,6 +48,13 @@ struct SelMesWinConfig_t {
 };
 static_assert(offsetof(SelMesWinConfig_t, defaultSel) == 0x2B0);
 static_assert(sizeof(SelMesWinConfig_t) == 0x2B4);
+
+// NormMesWin config blob passed to NormMesWinTask_Create, copied into the
+// task there. Opaque: NormMesWinConfig_Init and LoadStrings fill it.
+struct NormMesWinConfig_t {
+  u8 _pad000[0x1AC];
+};
+static_assert(sizeof(NormMesWinConfig_t) == 0x1AC);
 
 struct CommandSelectTask_t {
   u8 _pad000[0xB0];
@@ -138,6 +149,80 @@ int SysMesConfirm::SelectedAnswer() const {
   if (!sel)
     return -1;
   return static_cast<int>(sel->cursorIndex);
+}
+
+bool SysMesNotice::Show(u32 parentTask, std::string_view line1,
+                        std::string_view line2, std::string_view line3) {
+  if (task_ && shown1_ == line1 && shown2_ == line2 && shown3_ == line3)
+    return true;
+  Kill();
+
+  auto *memory = REX_KERNEL_MEMORY();
+  if (!memory)
+    return false;
+  auto *base = memory->virtual_membase();
+
+  const u32 vb = D2AnimeTask(parentTask).VarBag();
+  VarBagSetText(vb, "RBNOT_S1", line1);
+  VarBagSetText(vb, "RBNOT_S2", line2);
+  VarBagSetText(vb, "RBNOT_S3", line3);
+
+  rex::CallFrame frame(*rex::runtime::ThreadState::Get()->context());
+  rex::ppc::stack_guard guard(frame.ctx);
+
+  alignas(8) u8 zeroBuf[sizeof(NormMesWinConfig_t)]{};
+  u32 configAddr = rex::ppc::stack_push(frame.ctx, base, zeroBuf,
+                                        sizeof(NormMesWinConfig_t));
+
+  InitNormMesConfig(frame, base, configAddr);
+
+  u32 prefixAddr = rex::ppc::stack_push_string(frame.ctx, base, "RBNOT");
+  LoadNormMesStrings(frame, base, configAddr, parentTask, prefixAddr);
+
+  task_ = bd::TaskRef(CreateNormMes(frame, base, parentTask, configAddr));
+  if (!task_) {
+    BD_ERROR("[sysmes] NormMesWinTask_Create gave no usable task");
+    return false;
+  }
+
+  shown1_ = line1;
+  shown2_ = line2;
+  shown3_ = line3;
+  BD_DEBUG("[sysmes] created NormMesWinTask at 0x{:08X} (parent=0x{:08X})",
+           task_.Address(), parentTask);
+  return true;
+}
+
+void SysMesNotice::Kill() {
+  const u32 addr = task_.Address();
+  if (!addr)
+    return;
+  bd::KillTask(addr);
+  task_.Reset();
+  shown1_.clear();
+  shown2_.clear();
+  shown3_.clear();
+}
+
+void SysMesNotice::Drop() {
+  task_.Reset();
+  shown1_.clear();
+  shown2_.clear();
+  shown3_.clear();
+}
+
+void SysMesVars::Emit(CsvBuilder &b) {
+  b.blank()
+      .comment("sysmes confirmation dialog variables")
+      .vars(sq1, sq2, sq3, sa1, sa2, fs, ln)
+      .pos(ps)
+      .pos(ofs)
+      .vars(wcl, ecl, fcl)
+      .blank()
+      .comment("sysmes notice window variables")
+      .vars(s1, s2, s3, noticeFs, noticeLn)
+      .pos(noticePs)
+      .vars(noticeWcl, noticeEcl, noticeFcl);
 }
 
 void SysMesConfirm::Kill() {

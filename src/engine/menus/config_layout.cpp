@@ -1031,13 +1031,7 @@ void ConfigLayout::build(CsvBuilder &b) {
   b.set(dlcDetail, "start", "-1");
   b.set(pad, "start", "-1");
 
-  // SelMesWinTask vars, read by SelMesWinConfig_LoadStrings("RBDEL").
-  b.blank()
-      .comment("sysmes confirmation dialog variables")
-      .vars(rbdelSQ1, rbdelSQ2, rbdelSQ3, rbdelSA1, rbdelSA2, rbdelFS, rbdelLN)
-      .pos(rbdelPS_)
-      .pos(rbdelOFS_)
-      .vars(rbdelWCL, rbdelECL, rbdelFCL);
+  sysmes.Emit(b);
 }
 
 } // namespace bd::engine

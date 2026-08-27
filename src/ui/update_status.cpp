@@ -12,6 +12,7 @@
 #include <imgui.h>
 
 #include "core/i18n.h"
+#include "engine/engine.h"
 #include "platform/platform.h"
 
 namespace bd::ui {
@@ -23,6 +24,10 @@ namespace {
 std::string CurrentLine() {
   using Updates = bd::platform::Updates;
   using Sync = bd::platform::ContentSync;
+
+  // The title's own prompt puts both checks on screen while it holds.
+  if (bd::engine::UpdatePrompt::Get().Active())
+    return {};
 
   if (Updates::Get().State() == Updates::Stage::kChecking)
     return i18n::Text("update.status.checking");

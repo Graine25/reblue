@@ -16,6 +16,7 @@
 #include "engine/d2anime/d2anime.h"
 #include "engine/menus/config_menu.h"
 #include "engine/menus/config_menu_data.h"
+#include "engine/menus/update_prompt.h"
 #include "engine/settings.h"
 #include "engine/sfx.h"
 #include "engine/state_layout.h"
@@ -501,6 +502,12 @@ REX_HOOK_RAW(TitleTask_Update) {
           }
           return;
       }
+      // The last frame before the original asks the content task to load
+      // downloadable content, which is the deadline for answering about it.
+      if (task->state == kTitleStateChildRunning && task->child_task == 0 &&
+          bd::engine::UpdatePrompt::Get().Hold(titleTask))
+        return;
+
       NavigateNoSaveMenu(titleTask);
       HoverTitleRows(titleTask);
       __imp__TitleTask_Update(ctx, base);

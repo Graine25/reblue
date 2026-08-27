@@ -8,7 +8,6 @@
 #include "ui/update_prompt_dialog.h"
 
 #include <cfloat>
-#include <cstdio>
 
 #include <imgui.h>
 
@@ -22,18 +21,6 @@ namespace {
 using Updates = bd::platform::Updates;
 
 const char *T(const char *key) { return i18n::Text(key).c_str(); }
-
-std::string FormatBytes(u64 bytes) {
-  constexpr double kGiB = 1024.0 * 1024.0 * 1024.0;
-  constexpr double kMiB = 1024.0 * 1024.0;
-  char buf[32];
-  const double b = static_cast<double>(bytes);
-  if (b >= kGiB)
-    std::snprintf(buf, sizeof(buf), "%.2f GiB", b / kGiB);
-  else
-    std::snprintf(buf, sizeof(buf), "%.1f MiB", b / kMiB);
-  return buf;
-}
 
 const char *ErrorKey(Updates::ApplyResult result) {
   switch (result) {
@@ -80,8 +67,8 @@ void UpdatePromptDialog::OnDraw(ImGuiIO &) {
         total == 0 ? 0.0f
                    : static_cast<float>(done) / static_cast<float>(total);
     ImGui::ProgressBar(fraction, ImVec2(-FLT_MIN, 0), nullptr);
-    ImGui::Text("%s / %s", FormatBytes(done).c_str(),
-                FormatBytes(total).c_str());
+    ImGui::Text("%s / %s", i18n::Bytes(done).c_str(),
+                i18n::Bytes(total).c_str());
     ImGui::End();
     return;
   }
@@ -110,7 +97,7 @@ void UpdatePromptDialog::OnDraw(ImGuiIO &) {
 
   ImGui::TextWrapped(
       "%s",
-      i18n::Fmt("update.body", ctx_.version, FormatBytes(ctx_.size)).c_str());
+      i18n::Fmt("update.body", ctx_.version, i18n::Bytes(ctx_.size)).c_str());
   ImGui::Spacing();
   ImGui::Separator();
   ImGui::Spacing();

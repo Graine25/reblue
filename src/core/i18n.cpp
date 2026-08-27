@@ -205,6 +205,15 @@ void SetGameTermResolver(GameTermResolver resolver) {
     Reload();
 }
 
+std::string Bytes(u64 bytes) {
+  constexpr double kGiB = 1024.0 * 1024.0 * 1024.0;
+  constexpr double kMiB = 1024.0 * 1024.0;
+  const double b = static_cast<double>(bytes);
+  if (b >= kGiB)
+    return fmt::format("{:.2f} GiB", b / kGiB);
+  return fmt::format("{:.1f} MiB", b / kMiB);
+}
+
 const std::string &Text(std::string_view key) {
   std::lock_guard lock(g_mutex);
   if (!g_loaded)

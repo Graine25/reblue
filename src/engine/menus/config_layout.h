@@ -481,19 +481,7 @@ private:
   static void SetListCount(AnimeMenuWidget &list, size_t count,
                            const char *tpl);
 
-  // RBDEL_ prefix. Format matches d2anime\warn\warn_mes_us.u16 (e.g. WARN0002).
-  StringV rbdelSQ1{"RBDEL_SQ1", ""};
-  StringV rbdelSQ2{"RBDEL_SQ2", ""};
-  StringV rbdelSQ3{"RBDEL_SQ3", ""};
-  StringV rbdelSA1{"RBDEL_SA1", ""};
-  StringV rbdelSA2{"RBDEL_SA2", ""};
-  FloatV rbdelFS{"RBDEL_FS", 32.0};
-  FloatV rbdelLN{"RBDEL_LN", 2.0};
-  AnimePos rbdelPS_{"RBDEL_PS", -1, 260, 870, 305, -100, true};
-  AnimePos rbdelOFS_{"RBDEL_OFS", 230, 185, 0, 0};
-  ColorV rbdelWCL{"RBDEL_WCL", 0, 0, 0, 192};       // window
-  ColorV rbdelECL{"RBDEL_ECL", 192, 192, 192, 255}; // edge
-  ColorV rbdelFCL{"RBDEL_FCL", 240, 240, 240, 255}; // frame
+  SysMesVars sysmes;
 };
 
 constexpr AnimeMenuWidget ConfigLayout::ItemList(const char *name, int width,

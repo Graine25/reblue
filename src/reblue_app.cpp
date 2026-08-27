@@ -937,9 +937,10 @@ void ReblueApp::OnPreLaunchModule() {
   bd::vfs::VFS::Get().Init(rt->game_data_root(), rt->cache_root());
   bd::vfs::VFS::Get().SetProfile(profile_root);
 
-  // After the VFS: the content sync this hands off to reconciles against the
-  // catalog the VFS owns.
+  // Arms the channel watch only. The check itself runs at the title, ahead of
+  // the guest's own downloadable-content load.
   bd::platform::Updates::Get().Start();
+  bd::engine::UpdatePrompt::Get().Init(install_root_);
 
   bd::engine::MountSaveStore(rt->file_system(), ResolveSavesRoot(profile_root));
 
@@ -1026,6 +1027,11 @@ void ReblueApp::MaybeShowUpdatePrompt() {
   const u32 generation = bd::platform::Updates::Get().Generation();
   if (generation == update_prompt_generation_)
     return;
+  // The title puts this answer to the player in the engine's own windows.
+  if (bd::engine::UpdatePrompt::Get().Active()) {
+    update_prompt_generation_ = generation;
+    return;
+  }
   const auto newer = bd::platform::Updates::Get().Newer();
   if (!newer)
     return;

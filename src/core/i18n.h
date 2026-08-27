@@ -46,6 +46,9 @@ template <typename... A> std::string Fmt(std::string_view key, A &&...args) {
   }
 }
 
+// MiB up to a gibibyte, GiB past it.
+std::string Bytes(u64 bytes);
+
 // Reads a term out of the disc's own message tables. Registered by the engine,
 // the only layer that can reach them. The installer runs without one.
 using GameTermResolver = std::function<bool(

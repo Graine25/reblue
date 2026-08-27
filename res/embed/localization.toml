@@ -1184,6 +1184,15 @@ downloading.es = "Descargando {} ({}/{})..."
 downloading.fr = "Téléchargement de {} ({}/{})..."
 downloading.it = "Scaricando {} ({}/{})..."
 
+# Two short lines each: the engine's message windows do not wrap a sentence.
+[update.prompt]
+app.us = "re:Blue v{} is available ({})."
+app_ask.us = "Download and install now?"
+content.us = "{} content update(s) are available ({})."
+content_ask.us = "Download now?"
+downloading.us = "Downloading re:Blue v{}... {}%"
+staged.us = "Update ready. Restarting re:Blue."
+
 [update.error]
 download_failed.us = "Download failed. Your install was not changed."
 download_failed.es = "Descarga fallida. La instalación no se modificó."

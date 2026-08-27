@@ -54,11 +54,12 @@ public:
     kUnpackFailed,   // corrupt archive or wrong contents
   };
 
-  // Fetches the one document this build asks for, once, when
-  // bd_update_check is set. Returns immediately. Call once the VFS is up,
-  // since the content sync it hands off to reconciles against the VFS
-  // catalog. Arms the channel watch whether or not the check itself is on.
+  // Arms the channel watch. The first check is the title prompt's BeginCheck.
   void Start();
+
+  // Fetches the one document this build asks for and hands the content url it
+  // names to ContentSync. State stays kIdle when there is nothing to ask.
+  void BeginCheck();
 
   // Which check produced the current answer, so a caller that acted on one
   // answer can tell a later answer from the same one read twice.
@@ -108,7 +109,6 @@ private:
   Updates(const Updates &) = delete;
   Updates &operator=(const Updates &) = delete;
 
-  void BeginCheck();
   void Check(const std::string &url);
   ApplyResult Apply(const std::filesystem::path &install_root);
 

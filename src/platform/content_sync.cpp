@@ -63,20 +63,46 @@ std::string ContentSync::Current() const {
 size_t ContentSync::Done() const { return done_.load(); }
 size_t ContentSync::Total() const { return total_.load(); }
 
+size_t ContentSync::PendingCount() const {
+  std::lock_guard lock(mutex_);
+  return pending_.size();
+}
+
+u64 ContentSync::PendingBytes() const { return pending_bytes_.load(); }
+
 void ContentSync::Start(const std::string &url) {
   if (url.empty())
     return;
   if (started_.exchange(true))
     return;
 
-  // Detached: the ordered exit kills the process outright, so a fetch still
-  // waiting on the network never holds shutdown up.
-  std::thread([this, url] { Run(url); }).detach();
-}
-
-void ContentSync::Run(const std::string &url) {
+  // Stamped before the thread: what waits on the app check reads this the
+  // instant that turns, and kIdle there would pass for serving no content.
   stage_.store(Stage::kChecking);
 
+  // Detached: the ordered exit kills the process outright, so a check still
+  // waiting on the network never holds shutdown up.
+  std::thread([this, url] { Check(url); }).detach();
+}
+
+void ContentSync::BeginFetch() {
+  if (fetching_.exchange(true))
+    return;
+  stage_.store(Stage::kFetching);
+  std::thread([this] { Fetch(); }).detach();
+}
+
+void ContentSync::Decline() {
+  {
+    std::lock_guard lock(mutex_);
+    pending_.clear();
+  }
+  pending_bytes_.store(0);
+  total_.store(0);
+  stage_.store(Stage::kDone);
+}
+
+void ContentSync::Check(const std::string &url) {
   std::string error;
   auto manifest = ContentManifest::Fetch(url, error);
   if (!manifest) {
@@ -88,7 +114,8 @@ void ContentSync::Run(const std::string &url) {
 
   auto &catalog = bd::vfs::VFS::Get().Content();
 
-  std::vector<const ContentEntry *> wanted;
+  std::vector<ContentEntry> wanted;
+  u64 bytes = 0;
   for (const auto &entry : manifest->packs) {
     if (!IsUsableId(entry.id)) {
       BD_WARN("[content] manifest names an unusable pack id, skipping it");
@@ -101,7 +128,8 @@ void ContentSync::Run(const std::string &url) {
     }
     if (catalog.InstalledVersion(entry.id) >= entry.version)
       continue;
-    wanted.push_back(&entry);
+    bytes += entry.size;
+    wanted.push_back(entry);
   }
 
   if (wanted.empty()) {
@@ -110,13 +138,34 @@ void ContentSync::Run(const std::string &url) {
     return;
   }
 
-  total_.store(wanted.size());
-  stage_.store(Stage::kFetching);
+  BD_INFO("[content] {} pack(s) on offer", wanted.size());
+  {
+    std::lock_guard lock(mutex_);
+    pending_ = std::move(wanted);
+    total_.store(pending_.size());
+  }
+  pending_bytes_.store(bytes);
+  stage_.store(Stage::kPending);
+}
+
+void ContentSync::Fetch() {
+  std::vector<ContentEntry> wanted;
+  {
+    std::lock_guard lock(mutex_);
+    wanted = std::move(pending_);
+    pending_.clear();
+  }
+  if (wanted.empty()) {
+    stage_.store(Stage::kDone);
+    return;
+  }
+
+  auto &catalog = bd::vfs::VFS::Get().Content();
   BD_INFO("[content] fetching {} pack(s)", wanted.size());
 
   std::vector<std::string> fetched;
   for (size_t i = 0; i < wanted.size(); ++i) {
-    const ContentEntry &entry = *wanted[i];
+    const ContentEntry &entry = wanted[i];
     done_.store(i);
     {
       std::lock_guard lock(mutex_);

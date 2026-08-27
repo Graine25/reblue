@@ -10,3 +10,4 @@
 
 #include "engine/menus/achievements_menu.h"
 #include "engine/menus/config_menu.h"
+#include "engine/menus/update_prompt.h"

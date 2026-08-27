@@ -22,6 +22,10 @@ public:
   // Once at startup, after rex::cvar::LoadConfig has run.
   void Init();
 
+  // Lays the global set over the guest globals, the mixer buses and the
+  // renderer's copies.
+  void Apply();
+
   // Overwrites the config range of the save block the guest is about to read.
   // Called from the bdSaveBlockRestoreConfig hook, which then lets the original
   // run so the guest applies its own mirrors.

@@ -16,6 +16,8 @@
 #include "platform/platform.h"
 
 REX_EXTERN(__imp__bdSaveBlockRestoreConfig);
+REX_EXTERN(__imp__bdGameConfigInit);
+REX_IMPORT(__imp__bdSoundStartWithVolume, SoundStartWithVolume, u32(u32, f64));
 
 REXCVAR_DECLARE(i32, bd_opt_msg_speed);
 REXCVAR_DECLARE(i32, bd_opt_msg_size);
@@ -102,6 +104,13 @@ inline constexpr u32 kAudioHints = 0x82DC40DC;
 inline constexpr u32 kCtlNormalType = 0x82DC40E0;
 inline constexpr u32 kCtlMechattType = 0x82DC40E4;
 inline constexpr u32 kContentTask = 0x82DC9A80;
+// Each holds a pointer to a bus name.
+inline constexpr u32 kSoundBusDefault = 0x82774488;
+inline constexpr u32 kSoundBusMusic = 0x8277448C;
+inline constexpr u32 kSoundBusVoice = 0x82774490;
+inline constexpr u32 kSeMixLevel = 0x827744DC;
+inline constexpr u32 kVisualRender = 0x82DC9848;
+inline constexpr u32 kGlobalConfig = 0x82DEC270;
 } // namespace addr
 
 namespace {
@@ -144,6 +153,20 @@ constexpr u32 kWriteBlockOffset = 55208;
 constexpr u32 kReadBlockOffset = 9528;
 constexpr u32 kBlockSelector = 100896;
 
+// Into g_pVisualRender, and into the global config for the camera.
+constexpr u32 kRenderBrightness = 0x1B2C;
+constexpr u32 kRenderBrightnessChannels = 3;
+constexpr u32 kRenderScreenPosX = 0x1B44;
+constexpr u32 kRenderScreenPosY = 0x1B48;
+constexpr u32 kConfigCamera = 0x150;
+
+// A level runs -1 to 1 and reaches the mixer as (level + 1) scaled per bus.
+constexpr f64 kSeBusScale = 0.75;
+constexpr f64 kSeMixScale = 0.5;
+constexpr f64 kVoiceBusScale = 0.65;
+constexpr f64 kScreenPosXScale = 100.0;
+constexpr f64 kScreenPosYScale = -100.0;
+
 i32 LoadInt(u32 va) { return bd::mem::try_load<i32>(va); }
 
 bool StoreInt(u32 va, i32 value) {
@@ -177,6 +200,41 @@ u32 ReadBlockBase() {
     return 0;
   const bool second = bd::mem::try_load<i32>(task + kBlockSelector) != 0;
   return task + (second ? kWriteBlockOffset : kReadBlockOffset);
+}
+
+// A volume global is inert until its bus is restarted with the level.
+void ApplyMixer() {
+  const f64 music = REXCVAR_GET(bd_opt_music_volume);
+  const f64 se = REXCVAR_GET(bd_opt_se_volume);
+  SoundStartWithVolume(bd::mem::try_load<u32>(addr::kSoundBusMusic),
+                       music + 1.0);
+  SoundStartWithVolume(bd::mem::try_load<u32>(addr::kSoundBusDefault),
+                       (se + 1.0) * kSeBusScale);
+  SoundStartWithVolume(bd::mem::try_load<u32>(addr::kSoundBusVoice),
+                       (se + 1.0) * kVoiceBusScale);
+  bd::mem::try_store<f32>(addr::kSeMixLevel,
+                          static_cast<f32>((se + 1.0) * kSeMixScale));
+}
+
+// These copies are what gets read back, never the globals.
+void ApplyMirrors() {
+  bd::mem::try_store<i32>(addr::kGlobalConfig + kConfigCamera,
+                          REXCVAR_GET(bd_opt_camera));
+
+  const u32 render = bd::mem::try_load<u32>(addr::kVisualRender);
+  if (!render)
+    return;
+
+  const auto brightness = static_cast<f32>(REXCVAR_GET(bd_opt_brightness));
+  for (u32 i = 0; i < kRenderBrightnessChannels; ++i)
+    bd::mem::try_store<f32>(render + kRenderBrightness + i * sizeof(f32),
+                            brightness);
+  bd::mem::try_store<f32>(
+      render + kRenderScreenPosX,
+      static_cast<f32>(REXCVAR_GET(bd_opt_screen_pos_x) * kScreenPosXScale));
+  bd::mem::try_store<f32>(
+      render + kRenderScreenPosY,
+      static_cast<f32>(REXCVAR_GET(bd_opt_screen_pos_y) * kScreenPosYScale));
 }
 
 // Pushes the global set into the guest globals. A no-op before the address
@@ -281,6 +339,12 @@ void GameOptions::Init() {
         });
 }
 
+void GameOptions::Apply() {
+  AdoptCvars();
+  ApplyMixer();
+  ApplyMirrors();
+}
+
 void GameOptions::Flush() {
   if (!dirty_)
     return;
@@ -339,7 +403,9 @@ bool GameOptions::SetSkipEvents(i32 v) {
 i32 GameOptions::Camera() const { return LoadInt(addr::kCamera); }
 bool GameOptions::SetCamera(i32 v) {
   dirty_ |= WriteCvar("bd_opt_camera", v);
-  return StoreInt(addr::kCamera, v);
+  const bool changed = StoreInt(addr::kCamera, v);
+  ApplyMirrors();
+  return changed;
 }
 
 i32 GameOptions::TargetFirst() const { return LoadInt(addr::kTargetFirst); }
@@ -365,7 +431,9 @@ bool GameOptions::SetCtlMechattType(i32 v) {
 f64 GameOptions::MusicVolume() const { return LoadFloat(addr::kMusicVolume); }
 bool GameOptions::SetMusicVolume(f64 v) {
   dirty_ |= WriteCvar("bd_opt_music_volume", v);
-  return StoreFloat(addr::kMusicVolume, v);
+  const bool changed = StoreFloat(addr::kMusicVolume, v);
+  ApplyMixer();
+  return changed;
 }
 
 f64 GameOptions::SeVolume() const { return LoadFloat(addr::kSeVolume); }
@@ -373,25 +441,32 @@ bool GameOptions::SetSeVolume(f64 v) {
   dirty_ |= WriteCvar("bd_opt_se_volume", v);
   const bool se = StoreFloat(addr::kSeVolume, v);
   const bool voice = StoreFloat(addr::kVoiceVolume, v);
+  ApplyMixer();
   return se || voice;
 }
 
 f64 GameOptions::Brightness() const { return LoadFloat(addr::kBrightness); }
 bool GameOptions::SetBrightness(f64 v) {
   dirty_ |= WriteCvar("bd_opt_brightness", v);
-  return StoreFloat(addr::kBrightness, v);
+  const bool changed = StoreFloat(addr::kBrightness, v);
+  ApplyMirrors();
+  return changed;
 }
 
 f64 GameOptions::ScreenPosX() const { return LoadFloat(addr::kScreenPosX); }
 bool GameOptions::SetScreenPosX(f64 v) {
   dirty_ |= WriteCvar("bd_opt_screen_pos_x", v);
-  return StoreFloat(addr::kScreenPosX, v);
+  const bool changed = StoreFloat(addr::kScreenPosX, v);
+  ApplyMirrors();
+  return changed;
 }
 
 f64 GameOptions::ScreenPosY() const { return LoadFloat(addr::kScreenPosY); }
 bool GameOptions::SetScreenPosY(f64 v) {
   dirty_ |= WriteCvar("bd_opt_screen_pos_y", v);
-  return StoreFloat(addr::kScreenPosY, v);
+  const bool changed = StoreFloat(addr::kScreenPosY, v);
+  ApplyMirrors();
+  return changed;
 }
 
 } // namespace bd::engine
@@ -400,4 +475,11 @@ REX_HOOK_RAW(bdSaveBlockRestoreConfig) {
   bd::engine::GameOptions::Get().WriteBlock();
   __imp__bdSaveBlockRestoreConfig(ctx, base);
   bd::engine::GameOptions::Get().AdoptVoiceType();
+}
+
+// The original writes the engine's defaults over the whole set, on every
+// return to the title as well as at boot.
+REX_HOOK_RAW(bdGameConfigInit) {
+  __imp__bdGameConfigInit(ctx, base);
+  bd::engine::GameOptions::Get().Apply();
 }

@@ -14,11 +14,13 @@
 #include <winhttp.h>
 #elif defined(REBLUE_HAVE_CURL)
 #include <curl/curl.h>
+#include <dlfcn.h>
 #endif
 
 #include <fstream>
 #include <functional>
 #include <mutex>
+#include <string>
 #include <system_error>
 
 #include "core/build_info.h"
@@ -87,8 +89,8 @@ HTTPResult Perform(const std::string &url, const BodySink &sink,
 
   const DWORD flags =
       parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0;
-  Handle request{WinHttpOpenRequest(connection.h, L"GET", path.c_str(),
-                                    nullptr, WINHTTP_NO_REFERER,
+  Handle request{WinHttpOpenRequest(connection.h, L"GET", path.c_str(), nullptr,
+                                    WINHTTP_NO_REFERER,
                                     WINHTTP_DEFAULT_ACCEPT_TYPES, flags)};
   if (!request.h) {
     out.error = "WinHttpOpenRequest failed";
@@ -117,10 +119,10 @@ HTTPResult Perform(const std::string &url, const BodySink &sink,
   u64 total = 0;
   DWORD length = 0;
   size = sizeof(length);
-  if (WinHttpQueryHeaders(request.h, WINHTTP_QUERY_CONTENT_LENGTH |
-                                         WINHTTP_QUERY_FLAG_NUMBER,
-                          WINHTTP_HEADER_NAME_BY_INDEX, &length, &size,
-                          WINHTTP_NO_HEADER_INDEX)) {
+  if (WinHttpQueryHeaders(
+          request.h, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+          WINHTTP_HEADER_NAME_BY_INDEX, &length, &size,
+          WINHTTP_NO_HEADER_INDEX)) {
     total = length;
   }
 
@@ -151,9 +153,80 @@ HTTPResult Perform(const std::string &url, const BodySink &sink,
 constexpr long kStallBytesPerSec = 512;
 constexpr long kStallSeconds = 30;
 
+// Loaded, not linked: a machine without libcurl loses the update check rather
+// than the ability to start.
+struct Curl {
+  CURLcode (*global_init)(long);
+  CURL *(*easy_init)();
+  CURLcode (*easy_setopt)(CURL *, CURLoption, ...);
+  CURLcode (*easy_perform)(CURL *);
+  CURLcode (*easy_getinfo)(CURL *, CURLINFO, ...);
+  void (*easy_cleanup)(CURL *);
+  const char *(*easy_strerror)(CURLcode);
+};
+
+const Curl *LoadCurl(std::string &error) {
+  static Curl curl{};
+  static bool loaded = false;
+  static std::string load_error;
+  static std::once_flag once;
+
+  std::call_once(once, [] {
+    static constexpr const char *kNames[] = {
+#if defined(__APPLE__)
+        "libcurl.4.dylib",
+        "libcurl.dylib",
+#else
+        "libcurl.so.4", "libcurl.so", "libcurl-gnutls.so.4",
+#endif
+    };
+    void *lib = nullptr;
+    for (const char *name : kNames) {
+      lib = dlopen(name, RTLD_LAZY | RTLD_LOCAL);
+      if (lib != nullptr)
+        break;
+    }
+    if (lib == nullptr) {
+      const char *why = dlerror();
+      load_error = std::string("libcurl could not be loaded: ") +
+                   (why != nullptr ? why : "not installed");
+      return;
+    }
+
+    const auto sym = [lib](const char *name) { return dlsym(lib, name); };
+    curl.global_init =
+        reinterpret_cast<CURLcode (*)(long)>(sym("curl_global_init"));
+    curl.easy_init = reinterpret_cast<CURL *(*)()>(sym("curl_easy_init"));
+    curl.easy_setopt = reinterpret_cast<CURLcode (*)(CURL *, CURLoption, ...)>(
+        sym("curl_easy_setopt"));
+    curl.easy_perform =
+        reinterpret_cast<CURLcode (*)(CURL *)>(sym("curl_easy_perform"));
+    curl.easy_getinfo = reinterpret_cast<CURLcode (*)(CURL *, CURLINFO, ...)>(
+        sym("curl_easy_getinfo"));
+    curl.easy_cleanup =
+        reinterpret_cast<void (*)(CURL *)>(sym("curl_easy_cleanup"));
+    curl.easy_strerror =
+        reinterpret_cast<const char *(*)(CURLcode)>(sym("curl_easy_strerror"));
+
+    loaded = curl.global_init != nullptr && curl.easy_init != nullptr &&
+             curl.easy_setopt != nullptr && curl.easy_perform != nullptr &&
+             curl.easy_getinfo != nullptr && curl.easy_cleanup != nullptr &&
+             curl.easy_strerror != nullptr;
+    if (!loaded) {
+      load_error = "libcurl is missing entry points this build needs";
+      return;
+    }
+    curl.global_init(CURL_GLOBAL_DEFAULT);
+  });
+
+  if (!loaded)
+    error = load_error;
+  return loaded ? &curl : nullptr;
+}
+
 size_t WriteThunk(char *data, size_t size, size_t count, void *user) {
   const auto *sink = static_cast<const BodySink *>(user);
-  (*sink)(data, size * count);
+  (*sink)(data, size *count);
   return size * count;
 }
 
@@ -168,46 +241,47 @@ int ProgressThunk(void *user, curl_off_t total, curl_off_t done, curl_off_t,
 HTTPResult Perform(const std::string &url, const BodySink &sink,
                    const DownloadProgress &progress) {
   HTTPResult out;
-  static std::once_flag curl_once;
-  std::call_once(curl_once, [] { curl_global_init(CURL_GLOBAL_DEFAULT); });
+  const Curl *api = LoadCurl(out.error);
+  if (api == nullptr)
+    return out;
 
-  CURL *curl = curl_easy_init();
+  CURL *curl = api->easy_init();
   if (curl == nullptr) {
     out.error = "curl_easy_init failed";
     return out;
   }
 
   char message[CURL_ERROR_SIZE] = {};
-  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS,
+  api->easy_setopt(curl, CURLOPT_URL, url.c_str());
+  api->easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+  api->easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS,
                    static_cast<long>(kTimeoutMs));
-  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, kStallBytesPerSec);
-  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, kStallSeconds);
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "reblue/" REBLUE_VERSION_STRING);
-  curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, message);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteThunk);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA,
+  api->easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, kStallBytesPerSec);
+  api->easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, kStallSeconds);
+  api->easy_setopt(curl, CURLOPT_USERAGENT, "reblue/" REBLUE_VERSION_STRING);
+  api->easy_setopt(curl, CURLOPT_ERRORBUFFER, message);
+  api->easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteThunk);
+  api->easy_setopt(curl, CURLOPT_WRITEDATA,
                    const_cast<void *>(static_cast<const void *>(&sink)));
   if (progress) {
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressThunk);
-    curl_easy_setopt(curl, CURLOPT_XFERINFODATA,
+    api->easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    api->easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressThunk);
+    api->easy_setopt(curl, CURLOPT_XFERINFODATA,
                      const_cast<void *>(static_cast<const void *>(&progress)));
   }
 
-  const CURLcode result = curl_easy_perform(curl);
+  const CURLcode result = api->easy_perform(curl);
   if (result != CURLE_OK) {
-    out.error = message[0] != '\0' ? message : curl_easy_strerror(result);
-    curl_easy_cleanup(curl);
+    out.error = message[0] != '\0' ? message : api->easy_strerror(result);
+    api->easy_cleanup(curl);
     return out;
   }
 
   long status = 0;
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+  api->easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
   out.status = static_cast<int>(status);
   out.ok = true;
-  curl_easy_cleanup(curl);
+  api->easy_cleanup(curl);
   return out;
 }
 
@@ -216,7 +290,8 @@ HTTPResult Perform(const std::string &url, const BodySink &sink,
 HTTPResult Perform(const std::string &, const BodySink &,
                    const DownloadProgress &) {
   HTTPResult out;
-  out.error = "this build has no HTTP client (libcurl was not found)";
+  out.error = "this build has no HTTP client (built without the libcurl "
+              "headers)";
   return out;
 }
 

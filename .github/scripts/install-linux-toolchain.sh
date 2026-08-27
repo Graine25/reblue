@@ -9,7 +9,8 @@ apt-get install -y --no-install-recommends \
   ca-certificates curl wget gnupg jq unzip git git-lfs file \
   software-properties-common lsb-release \
   binutils ccache cmake ninja-build python3 \
-  g++-13 libvulkan-dev pkg-config desktop-file-utils
+  g++-13 libvulkan-dev pkg-config desktop-file-utils \
+  libcurl4-openssl-dev
 
 # The SDK's own tools, rexglue among them, will not load without these.
 apt-get install -y --no-install-recommends \

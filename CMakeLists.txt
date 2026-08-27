@@ -113,11 +113,20 @@ if(REBLUE_PCH)
     endforeach()
 endif()
 
-# The update check speaks HTTPS: WinHTTP on Windows, libcurl elsewhere. Absent
-# curl the check compiles to a stub that says so, rather than failing configure
-# over a setting that ships off.
+# The update check speaks HTTPS: WinHTTP on Windows, libcurl elsewhere. Only
+# the headers are a build dependency, since http.cpp dlopens the library. A
+# build with no endpoint to ask may go without them.
 if(NOT WIN32)
     find_package(CURL QUIET)
+    if(NOT CURL_FOUND)
+        if(REBLUE_UPDATE_BASE)
+            message(FATAL_ERROR
+                "libcurl headers not found, but REBLUE_UPDATE_BASE is set. ")
+        endif()
+        message(WARNING
+            "libcurl headers not found: the update and content checks compile "
+            "to a stub in this build.")
+    endif()
 endif()
 
 rexglue_apply_target_settings(reblue_common)
@@ -151,7 +160,14 @@ foreach(target IN LISTS REBLUE_COMMON_TARGETS REBLUE_TARGETS)
 
     # platform/http.cpp is shared, so this has to reach the object library too.
     if(NOT WIN32 AND CURL_FOUND)
-        target_link_libraries(${target} PRIVATE CURL::libcurl)
+        # Config mode sets the target, module mode the variable.
+        if(TARGET CURL::libcurl)
+            target_include_directories(${target} PRIVATE
+                $<TARGET_PROPERTY:CURL::libcurl,INTERFACE_INCLUDE_DIRECTORIES>)
+        else()
+            target_include_directories(${target} PRIVATE ${CURL_INCLUDE_DIRS})
+        endif()
+        target_link_libraries(${target} PRIVATE ${CMAKE_DL_LIBS})
         target_compile_definitions(${target} PRIVATE REBLUE_HAVE_CURL)
     endif()
 

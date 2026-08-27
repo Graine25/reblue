@@ -1,6 +1,6 @@
 /**
  * @file    ui/watermark.h
- * @brief   Always-on build watermark in the bottom-right corner.
+ * @brief   Build watermark in the bottom-right corner, up with the F3 overlay.
  *
  * @copyright Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
  *            All rights reserved.

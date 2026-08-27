@@ -397,7 +397,6 @@ void ReblueApp::OnCreateDialogs(rex::ui::ImGuiDrawer *drawer) {
     SetPerfOverlayStage(static_cast<bd::ui::OverlayStage>(stage), drawer);
   });
 
-  watermark_ = std::make_unique<bd::ui::WatermarkOverlay>(drawer);
   fade_overlay_ = std::make_unique<bd::ui::FadeOverlay>(drawer);
 
   // reblue's own overlay takes F3. The SDK's F4 cvar settings and F7
@@ -1060,10 +1059,13 @@ void ReblueApp::SetPerfOverlayStage(bd::ui::OverlayStage stage,
                                     rex::ui::ImGuiDrawer *drawer) {
   if (stage == bd::ui::OverlayStage::Off) {
     perf_overlay_.reset();
+    watermark_.reset();
     return;
   }
   if (!perf_overlay_)
     perf_overlay_ = std::make_unique<bd::ui::PerfOverlay>(drawer);
+  if (!watermark_)
+    watermark_ = std::make_unique<bd::ui::WatermarkOverlay>(drawer);
   perf_overlay_->SetStage(stage);
 }
 

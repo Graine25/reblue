@@ -172,19 +172,22 @@ registers = []
 after_instruction = false
 jump_address_on_true = 0x823B4FDC
 
-# Bone palette: before the reg 0x3C palette upload in bdSceneNodeProcessRenderCmds.
+[[midasm_hook]]
+address = 0x82280EFC
+name = "bdObjectPaletteInterpHook"
+registers = ["r4", "r5"]
+after_instruction = false
+
+[[midasm_hook]]
+address = 0x8227F79C
+name = "bdObjectPaletteInterpHook"
+registers = ["r4", "r5"]
+after_instruction = false
+
 [[midasm_hook]]
 address = 0x82282E34
 name = "bdObjectPaletteInterpHook"
-registers = ["r4"]
-after_instruction = false
-
-# World matrix: before bl bdBuildViewMatrix (reg 0x14 upload); r28 also feeds the
-# reg-0x2C prev world upload next.
-[[midasm_hook]]
-address = 0x822829AC
-name = "bdObjectWorldInterpHook"
-registers = ["r3", "r28"]
+registers = ["r4", "r5"]
 after_instruction = false
 
 # Event shot handoff: defer the draw-once-then-hide consume to the next tick so

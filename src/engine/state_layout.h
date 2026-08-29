@@ -39,6 +39,9 @@ inline constexpr u32 kVoiceLanguages =
     0x82775714; // i32[] of locale ids, bd_boot.ini [Voice]
 inline constexpr u32 kVoiceLanguageCount = 0x82775794;
 inline constexpr u32 kLocaleId = 0x827A8578; // locale the guest latched at boot
+inline constexpr u32 kShadowLightView = 0x82DD6144;
+inline constexpr u32 kRenderView = 0x82DE87E0;
+inline constexpr u32 kCubeShadowLightView = 0x82776DA8;
 } // namespace addr
 
 // GameTask, FieldPlayerEntity and the character list nodes they head are

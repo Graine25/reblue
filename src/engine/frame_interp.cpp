@@ -11,8 +11,10 @@
 
 #include <chrono>
 #include <cmath>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include <rex/hook.h>
 #include <rex/ppc.h>
@@ -23,40 +25,37 @@
 #include "core/memory_helpers.h"
 #include "engine/d2anime/anime_mouse.h"
 #include "engine/d2anime/d2anime_task.h"
+#include "engine/d2anime/d2anime_types.h"
 #include "engine/frame_clock.h"
 #include "engine/guest_prim.h"
 #include "engine/glyph_set.h"
 #include "engine/menus/camp_settings.h"
 #include "engine/menus/local_map.h"
 #include "engine/mouse_cursor.h"
+#include "engine/state_layout.h"
 #include "engine/virtual_buttons.h"
 #include "gpu/gpu.h"
 
 namespace {
 
-constexpr u32 kCamViewOffset = 160; // camera view matrix
-constexpr u32 kCamEyeOffset = 288;  // camera world position (vec3)
-constexpr float kCutDistSq = 4.0f;  // squared eye jump => snap not lerp
 // Rotation similarity floor: trace(prevR^T currR)/3 = (1+2cos(theta))/3.
 // 0.90 ~= a 32-degree single-tick turn, beyond any authored pan, so cutscene
 // shot cuts snap while pans still interpolate.
-constexpr float kCutRotDot = 0.90f;
+constexpr float kViewCutRotDot = 0.90f;
 
-struct CamEntry {
+struct ViewEntry {
   float prevView[16];
   float currView[16];
-  float prevEye[3];
-  float currEye[3];
-  u64 lastTick = 0;
+  float avgStep = 0.0f;
+  double lastChange = 0.0;
   u64 lastSeen = 0;
   bool valid = false;
+  bool cut = false;
 };
 
-std::unordered_map<u32, CamEntry> g_cams; // render-thread only
+std::unordered_map<u32, ViewEntry> g_views;
 u64 g_camFrame = 0;
 u32 g_viewScratch = 0; // guest scratch holding the interpolated view matrix
-bool g_inCameraRender =
-    false; // true only inside bdCameraRenderSetup (render thread)
 
 void ReadFloats(be_f32 *p, float *out, int n) {
   for (int i = 0; i < n; ++i)
@@ -66,6 +65,14 @@ void WriteFloats(be_f32 *p, const float *in, int n) {
   for (int i = 0; i < n; ++i)
     p[i] = in[i];
 }
+constexpr double kTickSeconds = 1.0 / 30.0;
+constexpr double kFastChangeSeconds = kTickSeconds * 0.5;
+
+float EntityAlpha(double lastChange) {
+  const double held = bd::engine::FrameTime() - lastChange;
+  return float(std::clamp(held / kTickSeconds, 0.0, 1.0));
+}
+
 float EyeDistSq(const float a[3], const float b[3]) {
   const float dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
   return dx * dx + dy * dy + dz * dz;
@@ -75,40 +82,62 @@ void LerpMatrix(const float a[16], const float b[16], float t, float out[16]) {
     out[i] = a[i] + (b[i] - a[i]) * t;
 }
 
-void PruneCams() {
-  for (auto it = g_cams.begin(); it != g_cams.end();) {
+void PruneViews() {
+  for (auto it = g_views.begin(); it != g_views.end();) {
     if (g_camFrame - it->second.lastSeen > 4)
-      it = g_cams.erase(it);
+      it = g_views.erase(it);
     else
       ++it;
   }
 }
 
-// bdSceneNodeProcessRenderCmds uploads the current bone palette to VS reg 0x3C
-// and, 0x600 bytes later in the same stack frame, the previous-frame palette to
-// reg 0x9C (motion blur). Max 24 bones x 64B. Object world (reg 0x14) and its
-// previous (reg 0x2C) are one 4x4 matrix each.
-constexpr u32 kPalettePrevDelta = 0x600;
-constexpr int kPaletteFloats = 24 * 16;
+void EyeFromView(const float v[16], float eye[3]) {
+  const float tx = v[12], ty = v[13], tz = v[14];
+  eye[0] = -(tx * v[0] + ty * v[1] + tz * v[2]);
+  eye[1] = -(tx * v[4] + ty * v[5] + tz * v[6]);
+  eye[2] = -(tx * v[8] + ty * v[9] + tz * v[10]);
+}
+
 constexpr int kWorldFloats = 16;
+constexpr u32 kMaxPaletteMatrices = 96;
+constexpr int kMaxPaletteFloats = int(kMaxPaletteMatrices) * 16;
+constexpr u64 kSnapshotStaleFrames = 4;
 u32 g_paletteScratch = 0; // guest scratch for the interpolated palette
 u32 g_worldScratch = 0;   // guest scratch for the interpolated world
 
-// Cut/teleport snap thresholds: translation jump over kObjCutDist in one tick,
-// a rotation basis row turning past ~75 degrees, or any palette float moving
-// more than kPaletteCutDelta, all beyond legitimate per-tick motion.
-constexpr float kObjCutDistSq = 4.0f;
-constexpr float kObjCutRotDot = 0.25f;
-constexpr float kPaletteCutDelta = 1.5f;
+struct FloatSnapshot {
+  std::vector<float> prev;
+  std::vector<float> curr;
+  float avgStep = 0.0f;
+  double lastChange = 0.0;
+  u64 lastSeen = 0;
+  bool valid = false;
+  bool cut = false;
+};
 
-bool WorldMatrixDiscontinuous(const be_f32 *cur, const be_f32 *prv) {
-  float d2 = 0.0f;
-  for (int i = 12; i < 15; ++i) {
-    const float d = static_cast<float>(cur[i]) - static_cast<float>(prv[i]);
-    d2 += d * d;
-  }
-  if (d2 > kObjCutDistSq)
-    return true;
+std::mutex g_interpMutex;
+
+std::unordered_map<u64, FloatSnapshot> g_objSnapshots;
+u64 g_objFrame = 0;
+u32 g_drawObject = 0;
+u32 g_paletteSlot = 0;
+
+constexpr float kCutDistance = 64.0f;
+constexpr float kCutRatio = 10.0f;
+constexpr float kCutFloor = 20.0f;
+constexpr float kStepBlend = 0.25f;
+constexpr float kObjCutRotDot = 0.25f;
+
+bool StepDiscontinuous(float step, float avgStep) {
+  return avgStep > 0.0f && step > kCutFloor && step > avgStep * kCutRatio;
+}
+
+float BlendStep(float avgStep, float step) {
+  return avgStep > 0.0f ? avgStep + (step - avgStep) * kStepBlend : step;
+}
+
+float MinRowDot(const float *cur, const float *prv) {
+  float worst = 1.0f;
   for (int r = 0; r < 12; r += 4) {
     float dot = 0.0f, mc = 0.0f, mp = 0.0f;
     for (int i = r; i < r + 3; ++i) {
@@ -118,38 +147,135 @@ bool WorldMatrixDiscontinuous(const be_f32 *cur, const be_f32 *prv) {
       mp += p * p;
     }
     const float denom = std::sqrt(mc * mp);
-    if (denom > 1e-6f && dot / denom < kObjCutRotDot)
-      return true;
+    if (denom > 1e-6f && dot / denom < worst)
+      worst = dot / denom;
   }
-  return false;
+  return worst;
 }
 
-bool PaletteDiscontinuous(const be_f32 *cur, const be_f32 *prv, int floats) {
+bool RotationDiscontinuous(const float *cur, const float *prv, float floor) {
+  return MinRowDot(cur, prv) < floor;
+}
+
+float PaletteMaxDelta(const float *cur, const float *prv, int floats) {
+  float m = 0.0f;
   for (int i = 0; i < floats; ++i) {
-    const float d = static_cast<float>(cur[i]) - static_cast<float>(prv[i]);
-    if (d > kPaletteCutDelta || d < -kPaletteCutDelta)
-      return true;
+    const float d = std::fabs(cur[i] - prv[i]);
+    if (d > m)
+      m = d;
   }
-  return false;
+  return m;
 }
 
-// Lerp 'floats' big-endian floats prev->curr into a lazily allocated guest
-// scratch. Returns the scratch VA (0 on failure). Render thread only.
-u32 LerpGuestFloats(u32 currVa, u32 prevVa, int floats, u32 &scratch, float a) {
+bool InShadowDepthPass() {
+  auto *view = bd::mem::try_at<be_u32>(bd::engine::addr::kRenderView);
+  auto *sun = bd::mem::try_at<be_u32>(bd::engine::addr::kShadowLightView);
+  auto *cube = bd::mem::try_at<be_u32>(bd::engine::addr::kCubeShadowLightView);
+  if (!view)
+    return false;
+  bool isSun = sun != nullptr;
+  bool isCube = cube != nullptr;
+  for (int i = 0; i < 16 && (isSun || isCube); ++i) {
+    const u32 v = view[i];
+    if (isSun && u32(sun[i]) != v)
+      isSun = false;
+    if (isCube && u32(cube[i]) != v)
+      isCube = false;
+  }
+  return isSun || isCube;
+}
+
+void PruneSnapshots() {
+  for (auto it = g_objSnapshots.begin(); it != g_objSnapshots.end();) {
+    if (g_objFrame - it->second.lastSeen > kSnapshotStaleFrames)
+      it = g_objSnapshots.erase(it);
+    else
+      ++it;
+  }
+}
+
+struct AnimeClock {
+  float prev = 0.0f;
+  float curr = 0.0f;
+  double lastChange = 0.0;
+  u64 lastSeen = 0;
+  bool valid = false;
+};
+
+std::unordered_map<u32, AnimeClock> g_animeClocks;
+
+bool AnimeClockDiscontinuous(float delta, float speed) {
+  if (speed == 0.0f)
+    return true;
+  return delta * speed < 0.0f || std::fabs(delta) > std::fabs(speed) * 1.5f;
+}
+
+void PruneAnimeClocks() {
+  for (auto it = g_animeClocks.begin(); it != g_animeClocks.end();) {
+    if (g_objFrame - it->second.lastSeen > kSnapshotStaleFrames)
+      it = g_animeClocks.erase(it);
+    else
+      ++it;
+  }
+}
+
+enum class Snapshot { Missing, Ready, Rolled, First, Shared };
+
+Snapshot AdvanceSnapshot(u64 key, u32 srcVa, int floats, FloatSnapshot *&out) {
+  out = nullptr;
+  auto *src = bd::mem::try_at<be_f32>(srcVa);
+  if (!src)
+    return Snapshot::Missing;
+  FloatSnapshot &e = g_objSnapshots[key];
+  e.lastSeen = g_objFrame;
+  out = &e;
+  if (e.curr.size() != size_t(floats)) {
+    e.curr.assign(size_t(floats), 0.0f);
+    e.prev.assign(size_t(floats), 0.0f);
+    e.valid = false;
+  }
+  const double now = bd::engine::FrameTime();
+  if (!e.valid) {
+    for (int i = 0; i < floats; ++i)
+      e.curr[size_t(i)] = src[i];
+    e.prev = e.curr;
+    e.valid = true;
+    e.lastChange = now;
+    return Snapshot::First;
+  }
+  bool changed = false;
+  for (int i = 0; i < floats; ++i) {
+    if (e.curr[size_t(i)] != float(src[i])) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed)
+    return Snapshot::Ready;
+  const bool fast = now - e.lastChange < kFastChangeSeconds;
+  e.prev.swap(e.curr);
+  for (int i = 0; i < floats; ++i)
+    e.curr[size_t(i)] = src[i];
+  e.lastChange = now;
+  if (fast) {
+    e.prev = e.curr;
+    return Snapshot::Shared;
+  }
+  return Snapshot::Rolled;
+}
+
+u32 LerpToScratch(const FloatSnapshot &e, float a, u32 &scratch,
+                  int scratchFloats) {
   if (scratch == 0) {
-    scratch = bd::gpu::HostHeap::Get().AllocGuest(floats * 4, 16);
+    scratch = bd::gpu::HostHeap::Get().AllocGuest(u32(scratchFloats) * 4, 16);
     if (scratch == 0)
       return 0;
   }
-  auto *cur = bd::mem::at<be_f32>(currVa);
-  auto *prv = bd::mem::at<be_f32>(prevVa);
   auto *dst = bd::mem::at<be_f32>(scratch);
-  if (!cur || !prv || !dst)
+  if (!dst)
     return 0;
-  for (int i = 0; i < floats; ++i) {
-    const float p = prv[i], c = cur[i];
-    dst[i] = p + (c - p) * a;
-  }
+  for (size_t i = 0; i < e.curr.size(); ++i)
+    dst[i] = e.prev[i] + (e.curr[i] - e.prev[i]) * a;
   return scratch;
 }
 
@@ -467,6 +593,15 @@ namespace bd::engine {
 
 void OnGuestGameStep() {
   Advance();
+  {
+    std::lock_guard<std::mutex> lock(g_interpMutex);
+    ++g_objFrame;
+    ++g_camFrame;
+    PruneSnapshots();
+    PruneViews();
+    PruneAnimeClocks();
+  }
+  g_drawObject = 0;
   if (InterpolationActive() && TickDue()) {
     FlushEvtHidePending();
     ClearLightChangedList();
@@ -475,93 +610,163 @@ void OnGuestGameStep() {
 
 } // namespace bd::engine
 
-// Never write camera+160: the follow camera controller reads it in the
-// concurrent logic phase and would feed back.
-//
-// Raw, on the inherited context: a typed REX_IMPORT re-roots the guest stack
-// at ThreadState's r1 and overwrites the frames live underneath it.
-REX_EXTERN(__imp__bdCameraRenderSetup);
-REX_HOOK_RAW(bdCameraRenderSetup) {
-  const u32 cam = ctx.r3.u32;
-  if (!bd::engine::InterpolationActive()) {
-    __imp__bdCameraRenderSetup(ctx, base);
-    return;
-  }
-
-  ++g_camFrame;
-  PruneCams();
-
-  float liveView[16], liveEye[3];
-  ReadFloats(bd::mem::at<be_f32>(cam + kCamViewOffset), liveView, 16);
-  ReadFloats(bd::mem::at<be_f32>(cam + kCamEyeOffset), liveEye, 3);
-
-  CamEntry &e = g_cams[cam];
-  e.lastSeen = g_camFrame;
-
-  const u64 tick = bd::engine::TickCount();
-  if (tick != e.lastTick) {
-    if (e.valid) {
-      for (int i = 0; i < 16; ++i)
-        e.prevView[i] = e.currView[i];
-      for (int i = 0; i < 3; ++i)
-        e.prevEye[i] = e.currEye[i];
-    } else { // first observation: prev = curr (no lerp yet)
-      for (int i = 0; i < 16; ++i)
-        e.prevView[i] = liveView[i];
-      for (int i = 0; i < 3; ++i)
-        e.prevEye[i] = liveEye[i];
-    }
-    for (int i = 0; i < 16; ++i)
-      e.currView[i] = liveView[i];
-    for (int i = 0; i < 3; ++i)
-      e.currEye[i] = liveEye[i];
-    e.lastTick = tick;
-    e.valid = true;
-  }
-
-  g_inCameraRender = true;
-  ctx.r3.u32 = cam;
-  __imp__bdCameraRenderSetup(ctx, base);
-  g_inCameraRender = false;
-}
-
-// Redirects r4 to a scratch holding the interpolated view when it names a
-// tracked camera. Raw rather than marshaled because the callee also reads stack
-// params, which only the caller's own frame carries.
 REX_EXTERN(__imp__bdBuildViewMatrix);
 REX_HOOK_RAW(bdBuildViewMatrix) {
-  if (g_inCameraRender) {
-    const u32 viewVa = ctx.r4.u32;
-    if (viewVa > kCamViewOffset) {
-      auto it = g_cams.find(viewVa - kCamViewOffset);
-      if (it != g_cams.end() && it->second.valid) {
-        const CamEntry &e = it->second;
-        float view[16];
-        bool cut = EyeDistSq(e.prevEye, e.currEye) > kCutDistSq;
-        if (!cut) {
-          float rotDot = 0.0f;
-          for (int i : {0, 1, 2, 4, 5, 6, 8, 9, 10})
-            rotDot += e.prevView[i] * e.currView[i];
-          cut = (rotDot / 3.0f) < kCutRotDot;
+  if (bd::engine::InterpolationActive() && ctx.r3.u32 && !ctx.r4.u32 &&
+      !ctx.r5.u32) {
+    std::lock_guard<std::mutex> lock(g_interpMutex);
+    g_drawObject = ctx.r3.u32;
+    g_paletteSlot = 0;
+    const bool applyWorld = !InShadowDepthPass();
+    FloatSnapshot *e = nullptr;
+    switch (AdvanceSnapshot(u64(ctx.r3.u32), ctx.r3.u32, kWorldFloats, e)) {
+    case Snapshot::Rolled: {
+      const float step = std::sqrt(EyeDistSq(&e->curr[12], &e->prev[12]));
+      const bool farStep = step > kCutDistance;
+      const bool oddStep = StepDiscontinuous(step, e->avgStep);
+      const float rotDot = MinRowDot(e->curr.data(), e->prev.data());
+      e->cut = farStep || oddStep || rotDot < kObjCutRotDot;
+      if (!e->cut)
+        e->avgStep = BlendStep(e->avgStep, step);
+    }
+      [[fallthrough]];
+    case Snapshot::Ready:
+      if (!e->cut && applyWorld) {
+        const u32 scratch = LerpToScratch(*e, EntityAlpha(e->lastChange),
+                                          g_worldScratch, kWorldFloats);
+        if (scratch)
+          ctx.r3.u32 = scratch;
+      }
+      break;
+    case Snapshot::First:
+      break;
+    case Snapshot::Shared:
+      g_drawObject = 0;
+      break;
+    case Snapshot::Missing:
+      break;
+    }
+  }
+
+  const u32 viewVa = bd::engine::InterpolationActive() ? ctx.r4.u32 : 0;
+  auto *live = viewVa ? bd::mem::try_at<be_f32>(viewVa) : nullptr;
+  if (live) {
+    if (viewVa == bd::engine::addr::kShadowLightView ||
+        viewVa == bd::engine::addr::kCubeShadowLightView) {
+      __imp__bdBuildViewMatrix(ctx, base);
+      return;
+    }
+    float liveView[16];
+    ReadFloats(live, liveView, 16);
+
+    float view[16];
+    bool shared = false;
+    {
+      std::lock_guard<std::mutex> lock(g_interpMutex);
+      ViewEntry &e = g_views[viewVa];
+      e.lastSeen = g_camFrame;
+      const double now = bd::engine::FrameTime();
+      bool changed = false;
+      for (int i = 0; i < 16; ++i) {
+        if (e.currView[i] != liveView[i]) {
+          changed = true;
+          break;
         }
-        if (cut) {
-          for (int i = 0; i < 16; ++i)
-            view[i] = e.currView[i]; // hard cut: snap
+      }
+      if (!e.valid) {
+        for (int i = 0; i < 16; ++i)
+          e.prevView[i] = e.currView[i] = liveView[i];
+        e.valid = true;
+        e.lastChange = now;
+      } else if (changed) {
+        const bool fast = now - e.lastChange < kFastChangeSeconds;
+        for (int i = 0; i < 16; ++i) {
+          e.prevView[i] = fast ? liveView[i] : e.currView[i];
+          e.currView[i] = liveView[i];
+        }
+        e.lastChange = now;
+        if (fast) {
+          shared = true;
         } else {
-          LerpMatrix(e.prevView, e.currView, bd::engine::Alpha(), view);
+          float pe[3], ce[3];
+          EyeFromView(e.prevView, pe);
+          EyeFromView(e.currView, ce);
+          const float step = std::sqrt(EyeDistSq(pe, ce));
+          e.cut = StepDiscontinuous(step, e.avgStep) ||
+                  RotationDiscontinuous(e.currView, e.prevView, kViewCutRotDot);
+          if (!e.cut)
+            e.avgStep = BlendStep(e.avgStep, step);
         }
-        if (g_viewScratch == 0) {
-          g_viewScratch = bd::gpu::HostHeap::Get().AllocGuest(64, 16);
-        }
-        if (g_viewScratch != 0) {
-          auto *dst = bd::mem::at<be_f32>(g_viewScratch);
-          WriteFloats(dst, view, 16);
-          ctx.r4.u32 = g_viewScratch;
+      }
+      if (!shared) {
+        if (e.cut) {
+          for (int i = 0; i < 16; ++i)
+            view[i] = e.currView[i];
+        } else {
+          LerpMatrix(e.prevView, e.currView, EntityAlpha(e.lastChange), view);
         }
       }
     }
+    if (shared) {
+      __imp__bdBuildViewMatrix(ctx, base);
+      return;
+    }
+
+    if (g_viewScratch == 0)
+      g_viewScratch = bd::gpu::HostHeap::Get().AllocGuest(64, 16);
+    if (g_viewScratch != 0) {
+      WriteFloats(bd::mem::at<be_f32>(g_viewScratch), view, 16);
+      ctx.r4.u32 = g_viewScratch;
+    }
   }
   __imp__bdBuildViewMatrix(ctx, base);
+}
+
+REX_EXTERN(__imp__D2AnimeTask_Draw);
+REX_HOOK_RAW(D2AnimeTask_Draw) {
+  auto *task = bd::engine::InterpolationActive()
+                   ? bd::mem::try_at<bd::engine::D2AnimeTask_t>(ctx.r3.u32)
+                   : nullptr;
+  if (!task) {
+    __imp__D2AnimeTask_Draw(ctx, base);
+    return;
+  }
+
+  const float live = static_cast<float>(task->animFrame);
+  float prev = 0.0f;
+  float curr = 0.0f;
+  float alpha = 0.0f;
+  {
+    std::lock_guard<std::mutex> lock(g_interpMutex);
+    AnimeClock &c = g_animeClocks[ctx.r3.u32];
+    c.lastSeen = g_objFrame;
+    const double now = bd::engine::FrameTime();
+    if (!c.valid) {
+      c.prev = c.curr = live;
+      c.valid = true;
+      c.lastChange = now;
+    } else if (c.curr != live) {
+      const bool cut = now - c.lastChange < kFastChangeSeconds ||
+                       AnimeClockDiscontinuous(
+                           live - c.curr, static_cast<float>(task->animSpeed));
+      c.prev = cut ? live : c.curr;
+      c.curr = live;
+      c.lastChange = now;
+    }
+    alpha = EntityAlpha(c.lastChange);
+    if (c.prev == c.curr || alpha >= 1.0f)
+      c.prev = c.curr;
+    prev = c.prev;
+    curr = c.curr;
+  }
+
+  if (prev == curr) {
+    __imp__D2AnimeTask_Draw(ctx, base);
+    return;
+  }
+  task->animFrame = prev + (curr - prev) * alpha;
+  __imp__D2AnimeTask_Draw(ctx, base);
+  task->animFrame = live;
 }
 
 // Poll input at 30Hz so edge-detect and auto-repeat stay in lockstep with the
@@ -596,51 +801,40 @@ REX_HOOK_RAW(PadVibrationCore__vf03) {
   __imp__PadVibrationCore__vf03(ctx, base);
 }
 
-// r4 is the current bone palette, the previous one sits at r4 + 0x600. Redirect
-// it to a scratch holding lerp(prev, curr, alpha) for the render only. The
-// engine's own buffers are untouched.
-void bdObjectPaletteInterpHook(PPCRegister &r4) {
+void bdObjectPaletteInterpHook(PPCRegister &r4, PPCRegister &r5) {
   if (!bd::engine::InterpolationActive())
     return;
-  const float a = bd::engine::Alpha();
-  if (a <= 0.0f)
+  const u32 matrices = r5.u32;
+  if (!r4.u32 || matrices == 0 || matrices > kMaxPaletteMatrices)
     return;
-  const u32 currVa = r4.u32;
-  if (!currVa)
+  if (g_drawObject == 0)
     return;
-  auto *cur = bd::mem::at<be_f32>(currVa);
-  auto *prv = bd::mem::at<be_f32>(currVa + kPalettePrevDelta);
-  if (!cur || !prv || PaletteDiscontinuous(cur, prv, kPaletteFloats))
+  const int floats = int(matrices) * 16;
+  const u64 key = (u64(g_drawObject) << 32) | u64(g_paletteSlot + 1);
+  ++g_paletteSlot;
+
+  std::lock_guard<std::mutex> lock(g_interpMutex);
+  FloatSnapshot *e = nullptr;
+  switch (AdvanceSnapshot(key, r4.u32, floats, e)) {
+  case Snapshot::Rolled:
+    e->cut =
+        PaletteMaxDelta(e->curr.data(), e->prev.data(), floats) > kCutDistance;
+    break;
+  case Snapshot::Ready:
+    break;
+  case Snapshot::First:
+  case Snapshot::Shared:
+  case Snapshot::Missing:
     return;
-  const u32 s = LerpGuestFloats(currVa, currVa + kPalettePrevDelta,
-                                kPaletteFloats, g_paletteScratch, a);
-  if (s)
-    r4.u32 = s;
+  }
+  const u32 scratch =
+      e->cut ? 0
+             : LerpToScratch(*e, EntityAlpha(e->lastChange), g_paletteScratch,
+                             kMaxPaletteFloats);
+  if (scratch)
+    r4.u32 = scratch;
 }
 
-// r3 is the current object world matrix, r28 the previous one. Same
-// render-only redirect as the palette above.
-void bdObjectWorldInterpHook(PPCRegister &r3, PPCRegister &r28) {
-  if (!bd::engine::InterpolationActive())
-    return;
-  const float a = bd::engine::Alpha();
-  if (a <= 0.0f)
-    return;
-  const u32 currVa = r3.u32, prevVa = r28.u32;
-  if (!currVa || !prevVa)
-    return;
-  auto *cur = bd::mem::at<be_f32>(currVa);
-  auto *prv = bd::mem::at<be_f32>(prevVa);
-  if (!cur || !prv || WorldMatrixDiscontinuous(cur, prv))
-    return;
-  const u32 s =
-      LerpGuestFloats(currVa, prevVa, kWorldFloats, g_worldScratch, a);
-  if (s)
-    r3.u32 = s;
-}
-
-// Guest timers, the self-paced CRI movie threads included, need a stable
-// real-time timebase rather than the scaled guest clock.
 u32 rex_QueryPerformanceCounter_hook(u32 lpPerformanceCount) {
   if (lpPerformanceCount) {
     auto *out = bd::mem::at<be_i64>(lpPerformanceCount);

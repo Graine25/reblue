@@ -37,4 +37,6 @@ u64 TickCount();
 // Smoothed measured logic tick rate, for the F3 overlay.
 double TicksPerSecond();
 
+double FrameTime();
+
 } // namespace bd::engine

@@ -27,7 +27,10 @@ double g_accum = 0.0;
 float g_alpha = 0.0f;
 bool g_tickDue = true;
 u64 g_tickCount = 0;
-double g_tps = 30.0;
+double g_tps = 0.0;
+constexpr double kTpsWindow = 0.5;
+double g_tpsTicks = 0.0;
+double g_tpsSeconds = 0.0;
 
 double NowSeconds() {
   static const Clock::time_point kEpoch = Clock::now();
@@ -43,40 +46,44 @@ bool InterpolationActive() {
 }
 
 void Advance() {
-  if (!InterpolationActive()) {
-    g_tickDue = true;
-    g_alpha = 0.0f;
-    g_lastTime = 0.0;
-    return;
-  }
-
   const double now = NowSeconds();
   double dt = (g_lastTime > 0.0) ? (now - g_lastTime) : kTick;
   g_lastTime = now;
   dt = std::clamp(dt, 0.0, kMaxDelta);
 
-  g_accum += dt;
-
-  int ticks = 0;
-  while (g_accum >= kTick && ticks < kMaxTicksPerIter) {
-    g_accum -= kTick;
-    ++ticks;
-  }
-  if (ticks == kMaxTicksPerIter) {
+  int ticks = 1;
+  if (!InterpolationActive()) {
+    g_tickDue = true;
+    g_alpha = 0.0f;
     g_accum = 0.0;
+  } else {
+    g_accum += dt;
+    ticks = 0;
+    while (g_accum >= kTick && ticks < kMaxTicksPerIter) {
+      g_accum -= kTick;
+      ++ticks;
+    }
+    if (ticks == kMaxTicksPerIter) {
+      g_accum = 0.0;
+    }
+    g_tickDue = ticks > 0;
+    g_alpha = static_cast<float>(std::clamp(g_accum / kTick, 0.0, 0.9999));
   }
 
-  g_tickDue = ticks > 0;
-  if (g_tickDue) {
-    g_tickCount += ticks;
-    g_tps = g_tps * 0.95 + (ticks / std::max(dt, 1e-6)) * 0.05;
+  g_tickCount += ticks;
+  g_tpsTicks += ticks;
+  g_tpsSeconds += dt;
+  if (g_tpsSeconds >= kTpsWindow) {
+    g_tps = g_tpsTicks / g_tpsSeconds;
+    g_tpsTicks = 0.0;
+    g_tpsSeconds = 0.0;
   }
-  g_alpha = static_cast<float>(std::clamp(g_accum / kTick, 0.0, 0.9999));
 }
 
 bool TickDue() { return g_tickDue; }
 float Alpha() { return InterpolationActive() ? g_alpha : 0.0f; }
 u64 TickCount() { return g_tickCount; }
 double TicksPerSecond() { return g_tps; }
+double FrameTime() { return g_lastTime; }
 
 } // namespace bd::engine

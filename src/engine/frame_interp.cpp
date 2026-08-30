@@ -129,6 +129,7 @@ u64 g_nodeScope = 0;
 u32 g_listObject = 0;
 u32 g_listSeq = 0;
 std::unordered_map<u32, u64> g_recordKeys;
+u32 g_recordSeq = 0;
 
 u64 NodeIdentity(u32 nodeIdx) {
   const u32 vo = bd::mem::try_load<u32>(bd::engine::addr::kCameraRenderVO);
@@ -653,8 +654,10 @@ void OnGuestGameStep() {
 
 REX_EXTERN(__imp__bdSceneNodeProcessRenderCmds);
 REX_HOOK_RAW(bdSceneNodeProcessRenderCmds) {
-  if (bd::engine::InterpolationActive())
+  if (bd::engine::InterpolationActive()) {
     g_worldKey = g_nodeScope = NodeIdentity(ctx.r4.u32);
+    g_recordSeq = 0;
+  }
   __imp__bdSceneNodeProcessRenderCmds(ctx, base);
   g_worldKey = 0;
   g_nodeScope = 0;
@@ -662,8 +665,10 @@ REX_HOOK_RAW(bdSceneNodeProcessRenderCmds) {
 
 REX_EXTERN(__imp__bdSceneNodeDrawSingle);
 REX_HOOK_RAW(bdSceneNodeDrawSingle) {
-  if (bd::engine::InterpolationActive())
+  if (bd::engine::InterpolationActive()) {
     g_worldKey = g_nodeScope = NodeIdentity(ctx.r4.u32);
+    g_recordSeq = 0;
+  }
   __imp__bdSceneNodeDrawSingle(ctx, base);
   g_worldKey = 0;
   g_nodeScope = 0;
@@ -881,7 +886,7 @@ void bdAlphaPrimCaptureHook(PPCRegister &r3) {
   if (g_nodeScope == 0 || r3.u32 == 0)
     return;
   std::lock_guard<std::mutex> lock(g_interpMutex);
-  g_recordKeys[r3.u32] = g_nodeScope;
+  g_recordKeys[r3.u32] = g_nodeScope | (u64(++g_recordSeq) << 48);
 }
 
 void bdListObjectBeginHook(PPCRegister &r3) {

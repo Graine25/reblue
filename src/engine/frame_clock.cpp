@@ -23,6 +23,7 @@ constexpr int kMaxTicksPerIter = 4;
 using Clock = std::chrono::steady_clock;
 
 double g_lastTime = 0.0;
+double g_lastDelta = kTick;
 double g_accum = 0.0;
 float g_alpha = 0.0f;
 bool g_tickDue = true;
@@ -50,6 +51,7 @@ void Advance() {
   double dt = (g_lastTime > 0.0) ? (now - g_lastTime) : kTick;
   g_lastTime = now;
   dt = std::clamp(dt, 0.0, kMaxDelta);
+  g_lastDelta = dt;
 
   int ticks = 1;
   if (!InterpolationActive()) {
@@ -85,5 +87,6 @@ float Alpha() { return InterpolationActive() ? g_alpha : 0.0f; }
 u64 TickCount() { return g_tickCount; }
 double TicksPerSecond() { return g_tps; }
 double FrameTime() { return g_lastTime; }
+double FrameDelta() { return g_lastDelta; }
 
 } // namespace bd::engine

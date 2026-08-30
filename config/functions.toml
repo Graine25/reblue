@@ -885,6 +885,7 @@
 0x82282410 = { name = "bdBoneInitUnskinned", size = 0x80 }
 0x82282490 = { name = "bdSceneNodeCullTraverse", size = 0x178 }
 0x822827A8 = { name = "bdSceneTreeDraw", size = 0x168 }
+0x82282910 = { name = "bdSceneNodeProcessRenderCmds", size = 0x5C0 }
 0x822834E8 = { name = "bdAnimBoneEvaluate", size = 0x15E8 }
 0x82284B58 = { name = "bdBoneInitSkinned", size = 0x84 }
 0x82284EE8 = { name = "bdResourceManagerInit", size = 0x1A8 }

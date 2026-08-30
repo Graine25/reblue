@@ -9,6 +9,7 @@
  */
 #include "engine/frame_interp.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -109,10 +110,12 @@ struct FloatSnapshot {
   std::vector<float> prev;
   std::vector<float> curr;
   float avgStep = 0.0f;
+  float avgSpacing = 0.0f;
   double lastChange = 0.0;
   u64 lastSeen = 0;
   bool valid = false;
   bool cut = false;
+  u16 streak = 0;
 };
 
 std::mutex g_interpMutex;
@@ -121,12 +124,28 @@ std::unordered_map<u64, FloatSnapshot> g_objSnapshots;
 u64 g_objFrame = 0;
 u32 g_drawObject = 0;
 u32 g_paletteSlot = 0;
+u64 g_worldKey = 0;
+u64 g_nodeScope = 0;
+u32 g_listObject = 0;
+u32 g_listSeq = 0;
+std::unordered_map<u32, u64> g_recordKeys;
+
+u64 NodeIdentity(u32 nodeIdx) {
+  const u32 vo = bd::mem::try_load<u32>(bd::engine::addr::kCameraRenderVO);
+  return vo ? ((u64(nodeIdx) + 1) << 32) | vo : 0;
+}
 
 constexpr float kCutDistance = 64.0f;
 constexpr float kCutRatio = 10.0f;
 constexpr float kCutFloor = 20.0f;
 constexpr float kStepBlend = 0.25f;
 constexpr float kObjCutRotDot = 0.25f;
+constexpr u16 kTrustedStreak = 8;
+constexpr float kSubTickSpacing = float(kTickSeconds * 0.85);
+
+bool SubTickWriter(const FloatSnapshot &e) {
+  return e.avgSpacing != 0.0f && e.avgSpacing < kSubTickSpacing;
+}
 
 bool StepDiscontinuous(float step, float avgStep) {
   return avgStep > 0.0f && step > kCutFloor && step > avgStep * kCutRatio;
@@ -252,7 +271,12 @@ Snapshot AdvanceSnapshot(u64 key, u32 srcVa, int floats, FloatSnapshot *&out) {
   }
   if (!changed)
     return Snapshot::Ready;
-  const bool fast = now - e.lastChange < kFastChangeSeconds;
+  const double spacing = now - e.lastChange;
+  const bool fast = spacing < kFastChangeSeconds;
+  const float sample = float(std::min(spacing, kTickSeconds * 4.0));
+  e.avgSpacing = e.avgSpacing == 0.0f
+                     ? sample
+                     : e.avgSpacing + (sample - e.avgSpacing) * 0.25f;
   e.prev.swap(e.curr);
   for (int i = 0; i < floats; ++i)
     e.curr[size_t(i)] = src[i];
@@ -300,11 +324,27 @@ bool bdFrameClockGateHook() { return !bd::engine::TickDue(); }
 // re-read the unchanged values.
 bool bdShaderAnimGateHook() { return !bd::engine::TickDue(); }
 
-// The ambient recovery ramp steps a fixed 0.1 per call with no delta time, and
-// runs outside the 30Hz block while the logic that rewrites the darkened
-// ambient runs only on ticks. Ungated, several steps accumulate between ticks
-// and the player ramps bright then snaps back.
-bool bdPlayerAmbientRampGateHook() { return !bd::engine::TickDue(); }
+bool bdPlayerAmbientRampGateHook(PPCRegister &r31) {
+  if (!bd::engine::InterpolationActive())
+    return false;
+  auto *amb = bd::mem::try_at<be_f32>(r31.u32 + 0xBC4);
+  if (!amb)
+    return true;
+  const float green = amb[1];
+  if (green >= 1.0f)
+    return true;
+  const float next =
+      green + 0.1f * float(bd::engine::FrameDelta() / kTickSeconds);
+  if (next >= 1.0f) {
+    amb[0] = 1.0f;
+    amb[1] = 1.0f;
+    amb[2] = 1.0f;
+  } else {
+    amb[1] = next;
+    amb[2] = next;
+  }
+  return true;
+}
 
 // Event camera cuts retire the outgoing shot draw-once-then-hide: the cut tick
 // arms a one-shot flag and the next Draw consumes it. The consume runs at tick
@@ -600,6 +640,7 @@ void OnGuestGameStep() {
     PruneSnapshots();
     PruneViews();
     PruneAnimeClocks();
+    g_recordKeys.clear();
   }
   g_drawObject = 0;
   if (InterpolationActive() && TickDue()) {
@@ -610,28 +651,62 @@ void OnGuestGameStep() {
 
 } // namespace bd::engine
 
+REX_EXTERN(__imp__bdSceneNodeProcessRenderCmds);
+REX_HOOK_RAW(bdSceneNodeProcessRenderCmds) {
+  if (bd::engine::InterpolationActive())
+    g_worldKey = g_nodeScope = NodeIdentity(ctx.r4.u32);
+  __imp__bdSceneNodeProcessRenderCmds(ctx, base);
+  g_worldKey = 0;
+  g_nodeScope = 0;
+}
+
+REX_EXTERN(__imp__bdSceneNodeDrawSingle);
+REX_HOOK_RAW(bdSceneNodeDrawSingle) {
+  if (bd::engine::InterpolationActive())
+    g_worldKey = g_nodeScope = NodeIdentity(ctx.r4.u32);
+  __imp__bdSceneNodeDrawSingle(ctx, base);
+  g_worldKey = 0;
+  g_nodeScope = 0;
+}
+
 REX_EXTERN(__imp__bdBuildViewMatrix);
 REX_HOOK_RAW(bdBuildViewMatrix) {
   if (bd::engine::InterpolationActive() && ctx.r3.u32 && !ctx.r4.u32 &&
       !ctx.r5.u32) {
     std::lock_guard<std::mutex> lock(g_interpMutex);
-    g_drawObject = ctx.r3.u32;
+    u64 key;
+    if (g_worldKey) {
+      key = (1ull << 63) | g_worldKey;
+    } else if (auto it = g_recordKeys.find(ctx.r3.u32 - 16);
+               it != g_recordKeys.end()) {
+      key = (1ull << 63) | it->second;
+    } else if (g_listObject) {
+      key = (1ull << 62) | (u64(g_listSeq++) << 32) | g_listObject;
+    } else {
+      key = u64(ctx.r3.u32);
+    }
+    g_drawObject = u32(key ^ (key >> 32));
+    g_worldKey = 0;
     g_paletteSlot = 0;
-    const bool applyWorld = !InShadowDepthPass();
+    const bool depthPass = InShadowDepthPass();
     FloatSnapshot *e = nullptr;
-    switch (AdvanceSnapshot(u64(ctx.r3.u32), ctx.r3.u32, kWorldFloats, e)) {
+    switch (AdvanceSnapshot(key, ctx.r3.u32, kWorldFloats, e)) {
     case Snapshot::Rolled: {
       const float step = std::sqrt(EyeDistSq(&e->curr[12], &e->prev[12]));
-      const bool farStep = step > kCutDistance;
-      const bool oddStep = StepDiscontinuous(step, e->avgStep);
-      const float rotDot = MinRowDot(e->curr.data(), e->prev.data());
-      e->cut = farStep || oddStep || rotDot < kObjCutRotDot;
-      if (!e->cut)
+      e->cut = step > kCutDistance || StepDiscontinuous(step, e->avgStep) ||
+               MinRowDot(e->curr.data(), e->prev.data()) < kObjCutRotDot ||
+               SubTickWriter(*e);
+      if (e->cut) {
+        e->streak = 0;
+      } else {
         e->avgStep = BlendStep(e->avgStep, step);
+        if (e->streak < 0xFFFF)
+          ++e->streak;
+      }
     }
       [[fallthrough]];
     case Snapshot::Ready:
-      if (!e->cut && applyWorld) {
+      if (!e->cut && (!depthPass || e->streak >= kTrustedStreak)) {
         const u32 scratch = LerpToScratch(*e, EntityAlpha(e->lastChange),
                                           g_worldScratch, kWorldFloats);
         if (scratch)
@@ -641,6 +716,7 @@ REX_HOOK_RAW(bdBuildViewMatrix) {
     case Snapshot::First:
       break;
     case Snapshot::Shared:
+      e->streak = 0;
       g_drawObject = 0;
       break;
     case Snapshot::Missing:
@@ -801,6 +877,20 @@ REX_HOOK_RAW(PadVibrationCore__vf03) {
   __imp__PadVibrationCore__vf03(ctx, base);
 }
 
+void bdAlphaPrimCaptureHook(PPCRegister &r3) {
+  if (g_nodeScope == 0 || r3.u32 == 0)
+    return;
+  std::lock_guard<std::mutex> lock(g_interpMutex);
+  g_recordKeys[r3.u32] = g_nodeScope;
+}
+
+void bdListObjectBeginHook(PPCRegister &r3) {
+  g_listObject = r3.u32;
+  g_listSeq = 0;
+}
+
+void bdListObjectEndHook() { g_listObject = 0; }
+
 void bdObjectPaletteInterpHook(PPCRegister &r4, PPCRegister &r5) {
   if (!bd::engine::InterpolationActive())
     return;
@@ -817,8 +907,9 @@ void bdObjectPaletteInterpHook(PPCRegister &r4, PPCRegister &r5) {
   FloatSnapshot *e = nullptr;
   switch (AdvanceSnapshot(key, r4.u32, floats, e)) {
   case Snapshot::Rolled:
-    e->cut =
-        PaletteMaxDelta(e->curr.data(), e->prev.data(), floats) > kCutDistance;
+    e->cut = PaletteMaxDelta(e->curr.data(), e->prev.data(), floats) >
+                 kCutDistance ||
+             SubTickWriter(*e);
     break;
   case Snapshot::Ready:
     break;

@@ -39,4 +39,6 @@ double TicksPerSecond();
 
 double FrameTime();
 
+double FrameDelta();
+
 } // namespace bd::engine

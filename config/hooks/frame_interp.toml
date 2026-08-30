@@ -168,7 +168,7 @@ jump_address_on_true = 0x823E9768
 [[midasm_hook]]
 address = 0x823B4FB4
 name = "bdPlayerAmbientRampGateHook"
-registers = []
+registers = ["r31"]
 after_instruction = false
 jump_address_on_true = 0x823B4FDC
 
@@ -244,4 +244,22 @@ after_instruction = false
 address = 0x82134144
 name = "bdItemDropTextReplayHook"
 registers = []
+after_instruction = false
+
+[[midasm_hook]]
+address = 0x821843E4
+name = "bdListObjectBeginHook"
+registers = ["r3"]
+after_instruction = false
+
+[[midasm_hook]]
+address = 0x821843E8
+name = "bdListObjectEndHook"
+registers = []
+after_instruction = false
+
+[[midasm_hook]]
+address = 0x8227DBB8
+name = "bdAlphaPrimCaptureHook"
+registers = ["r3"]
 after_instruction = false

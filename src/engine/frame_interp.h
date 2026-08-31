@@ -15,4 +15,6 @@ namespace bd::engine {
 // advances the tick clock and releases anything the interpolator deferred.
 void OnGuestGameStep();
 
+bool HoldPresent();
+
 } // namespace bd::engine

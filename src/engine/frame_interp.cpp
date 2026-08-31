@@ -10,6 +10,7 @@
 #include "engine/frame_interp.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -565,6 +566,24 @@ struct EvtSpeedRemainder {
 
 } // namespace
 
+namespace {
+constexpr u32 kCamCmdStop = 2;
+constexpr f64 kHoldMaxSeconds = kTickSeconds * 2.0;
+std::atomic<double> g_holdDeadline{0.0};
+} // namespace
+
+REX_EXTERN(__imp__issCamera__ProcessCommand);
+REX_HOOK_RAW(issCamera__ProcessCommand) {
+  const u32 word0 = bd::mem::try_load<u32>(ctx.r5.u32);
+  __imp__issCamera__ProcessCommand(ctx, base);
+  if (bd::engine::InterpolationActive() && bd::engine::EventScenePlaying()) {
+    g_holdDeadline.store(word0 == kCamCmdStop
+                             ? bd::engine::FrameTime() + kHoldMaxSeconds
+                             : 0.0,
+                         std::memory_order_relaxed);
+  }
+}
+
 REX_EXTERN(__imp__issObject__Update);
 REX_HOOK_RAW(issObject__Update) {
   EvtSpeedRemainder z(ctx.r3.u32);
@@ -866,6 +885,10 @@ void OnGuestGameStep() {
   if (InterpolationActive() && TickDue()) {
     ClearLightChangedList();
   }
+}
+
+bool HoldPresent() {
+  return FrameTime() < g_holdDeadline.load(std::memory_order_relaxed);
 }
 
 } // namespace bd::engine

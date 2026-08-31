@@ -22,6 +22,7 @@
 #include "core/hooks.h"
 #include "core/logging.h"
 #include "core/memory_helpers.h"
+#include "engine/engine.h"
 #include "gpu/d3d.h"
 #include "gpu/device.h"
 #include "gpu/host_resource_heap.h"
@@ -65,6 +66,8 @@ u32 D3DDevice_Swap_hook(u32 /*device*/, u32 front_buffer_va,
   auto *front_buffer =
       bd::gpu::HostResourceHeap::FromGuest<bd::gpu::GuestTexture>(
           front_buffer_va);
+  if (bd::engine::HoldPresent())
+    return 0;
   bd::gpu::Video::Present(front_buffer);
   return 0;
 }

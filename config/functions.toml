@@ -8,6 +8,7 @@
 0x82412688 = { name = "issSprite__vf02" }
 0x82416DD0 = { name = "issLight__vf02" }
 0x823F7680 = { name = "issEvent__Update" }
+0x82403E30 = { name = "issCamera__ProcessCommand" }
 0x82401448 = { name = "issFrame__Draw" }
 0x824025A8 = { name = "issFrame__DrawFade" }
 0x82576028 = { name = "bdPhysicalVertexBufferCreate" }

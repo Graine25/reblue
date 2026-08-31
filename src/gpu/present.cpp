@@ -55,10 +55,6 @@ void PaceFrame() {
   // 30Hz-gated logic, so it only runs at 1.0x when the engine ticks at 30Hz.
   if (bd::engine::SofdecMoviePlaying())
     fps = 30;
-  // Event cutscenes are coupled the same way (see EventScenePlaying), but never
-  // raise a user cap already at or below 30.
-  if ((fps == 0 || fps > 30) && bd::engine::EventScenePlaying())
-    fps = 30;
   if (fps <= 0) {
     next = {};
     return;

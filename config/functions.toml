@@ -1,4 +1,15 @@
 [functions]
+0x822B8DF0 = { name = "Player__Update_vf03" }
+0x823F4F40 = { name = "issMap__Update" }
+0x824046C0 = { name = "issCamera__Update" }
+0x82406688 = { name = "issObject__Update" }
+0x8240F540 = { name = "issActor__Update" }
+0x82411610 = { name = "issEffect__vf02" }
+0x82412688 = { name = "issSprite__vf02" }
+0x82416DD0 = { name = "issLight__vf02" }
+0x823F7680 = { name = "issEvent__Update" }
+0x82401448 = { name = "issFrame__Draw" }
+0x824025A8 = { name = "issFrame__DrawFade" }
 0x82576028 = { name = "bdPhysicalVertexBufferCreate" }
 0x82575F90 = { name = "bdPhysicalIndexBufferCreate" }
 0x820C03A0 = { name = "SequenceHolder_SequenceUnitBase_ctor", size = 0x80 }

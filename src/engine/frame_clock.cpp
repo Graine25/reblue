@@ -42,8 +42,7 @@ double NowSeconds() {
 
 bool InterpolationActive() {
   const i32 fps = Settings::Get().FPSLimit();
-  return (fps == 0 || fps > 30) && !SofdecMoviePlaying() &&
-         !EventScenePlaying();
+  return (fps == 0 || fps > 30) && !SofdecMoviePlaying();
 }
 
 void Advance() {

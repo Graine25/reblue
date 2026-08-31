@@ -190,27 +190,6 @@ name = "bdObjectPaletteInterpHook"
 registers = ["r4", "r5"]
 after_instruction = false
 
-# Event shot handoff: defer the draw-once-then-hide consume to the next tick so
-# camera cuts do not flash the outgoing shot out on interpolated frames.
-# issObject::Draw one-shot hide: fires before `stw r11, 0x9E0(r31)` (armed = 0);
-# on true skips the clear (keeps the object drawing until the next tick's Draw).
-[[midasm_hook]]
-address = 0x82406EF0
-name = "bdEvtShotHideDeferHook"
-registers = ["r31"]
-after_instruction = false
-jump_address_on_true = 0x82406EF4
-
-# issActor::Draw one-shot hide: fires before
-# `mr r3,r31; bl issActor__ApplySpecialModelFlags` (clears actor armed flag
-# +0x14C); on true skips the call site entirely.
-[[midasm_hook]]
-address = 0x824107D4
-name = "bdEvtShotHideDeferHook"
-registers = ["r31"]
-after_instruction = false
-jump_address_on_true = 0x824107DC
-
 # Frozen-NPC portrait frost overlay: capture the bdPrimDrawRect2D args at the
 # Script__vf02 callsite each tick (f1/f2 = x/y, f4/f5 = w/h, r8 = color,
 # r30 = script+208 texture object) for replay on interpolated frames.

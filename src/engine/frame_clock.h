@@ -17,11 +17,6 @@ namespace bd::engine {
 // guest's logic block.
 void Advance();
 
-// True when the render cap (bd_fps_limit) exceeds 30Hz or is unlimited (0), and
-// neither cutscene system forces native coupled mode. Sofdec movies advance
-// their clock from the per-frame delta, and event render lists live in the
-// flip-recycled Visual::Tag pool and need the vf02 update walk before every
-// rendered frame, so both must run coupled at 30Hz
 bool InterpolationActive();
 
 // True when this iteration should execute BD's 30Hz logic block.

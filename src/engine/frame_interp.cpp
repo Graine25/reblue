@@ -24,6 +24,7 @@
 #include <rex/types.h>
 
 #include "core/memory_helpers.h"
+#include "engine/cutscene.h"
 #include "engine/d2anime/anime_mouse.h"
 #include "engine/d2anime/d2anime_task.h"
 #include "engine/d2anime/d2anime_types.h"
@@ -43,6 +44,8 @@ namespace {
 // 0.90 ~= a 32-degree single-tick turn, beyond any authored pan, so cutscene
 // shot cuts snap while pans still interpolate.
 constexpr float kViewCutRotDot = 0.90f;
+constexpr float kEventViewCutStep = 2.0f;
+constexpr float kEventObjCutStep = 8.0f;
 
 struct ViewEntry {
   float prevView[16];
@@ -149,7 +152,7 @@ bool SubTickWriter(const FloatSnapshot &e) {
 }
 
 bool StepDiscontinuous(float step, float avgStep) {
-  return avgStep > 0.0f && step > kCutFloor && step > avgStep * kCutRatio;
+  return step > kCutFloor && (avgStep <= 0.0f || step > avgStep * kCutRatio);
 }
 
 float BlendStep(float avgStep, float step) {
@@ -347,73 +350,292 @@ bool bdPlayerAmbientRampGateHook(PPCRegister &r31) {
   return true;
 }
 
-// Event camera cuts retire the outgoing shot draw-once-then-hide: the cut tick
-// arms a one-shot flag and the next Draw consumes it. The consume runs at tick
-// start, ahead of that tick's logic, because a cut window re-arms the hide
-// every tick and a later consume kills the fresh re-arm.
-constexpr u32 kIssObjectVtableEA = 0x8208AFA4;
-constexpr u32 kIssActorVtableEA = 0x8208B334;
-constexpr u32 kIssActorHideFnEA = 0x82410A18; // clears issActor +0x14C
-
 namespace {
-struct IssObject_t {
-  u8 _pad000[0x9E0];
-  be_u32 hideConsume; // Draw writes 0 to cancel the armed hide
-  be_u32 hideArm;     // cut tick arms the one-shot hide
+
+constexpr u32 kEvtStateOffset = 136;
+constexpr u32 kEvtFrameOffset = 104;
+constexpr u32 kEvtSpeedOffset = 1004;
+constexpr u32 kEvtChildListOffset = 1008;
+constexpr u32 kEvtChildNextOffset = 132;
+constexpr u32 kEvtChildParentOffset = 128;
+constexpr u32 kEvtPlaying = 2;
+constexpr u32 kSceneSpeedMulEA = 0x82DDA880;
+
+constexpr u32 kIssActorUpdateEA = 0x8240F540;
+constexpr u32 kIssCameraUpdateEA = 0x824046C0;
+
+constexpr u32 kIssObjectUpdateEA = 0x82406688;
+constexpr u32 kIssMapUpdateEA = 0x823F4F40;
+constexpr u32 kIssEffectVf02EA = 0x82411610;
+constexpr u32 kIssSpriteVf02EA = 0x82412688;
+constexpr u32 kIssLightVf02EA = 0x82416DD0;
+
+constexpr u32 kEvtMovementUpdates[] = {
+    kIssActorUpdateEA,  kIssObjectUpdateEA, kIssCameraUpdateEA,
+    kIssMapUpdateEA,    kIssEffectVf02EA,   kIssSpriteVf02EA,
+    kIssLightVf02EA,
 };
-static_assert(offsetof(IssObject_t, hideConsume) == 0x9E0);
-static_assert(offsetof(IssObject_t, hideArm) == 0x9E4);
-static_assert(sizeof(IssObject_t) == 0x9E8);
 
-// issActor__ApplySpecialModelFlags (kIssActorHideFnEA) is the consume path.
-// It clears +0x14C in the guest, which is not modeled here.
-struct IssActor_t {
-  u8 _pad000[0x150];
-  be_u32 hideArm;
+struct EvtDriveState {
+  u32 frameBits = 0;
+  bool framesSeen = false;
+  bool advancing = false;
+  float lastAlpha = 0.0f;
+  bool drove = false;
 };
-static_assert(offsetof(IssActor_t, hideArm) == 0x150);
-static_assert(sizeof(IssActor_t) == 0x154);
-} // namespace
+std::unordered_map<u32, EvtDriveState> g_evtDrive;
+std::unordered_map<u32, f32> g_evtTickRemainder;
+bool g_hostEvtDrive = false;
+bool g_evtActorSuppressed = false;
+f32 g_evtActorRemainder = 1.0f;
+f32 g_hostEvtFrac = 0.0f;
 
-namespace {
-std::unordered_set<u32> g_evtHidePending;
-} // namespace
+bool IsMovementUpdate(u32 fn) {
+  for (const u32 v : kEvtMovementUpdates)
+    if (v == fn)
+      return true;
+  return false;
+}
 
-bool bdEvtShotHideDeferHook(PPCRegister &r31) {
-  if (!bd::engine::InterpolationActive()) {
-    g_evtHidePending.clear();
-    return false;
-  }
-  if (g_evtHidePending.size() > 256)
-    g_evtHidePending.clear();
-  g_evtHidePending.insert(r31.u32);
+constexpr u32 kCamOutputOffset = 156;
+constexpr int kCamOutputFloats = 64;
+constexpr u32 kCamDirOffset = 788;
+constexpr u32 kCamSampleOffset = 4536;
+constexpr int kCamSampleFloats = 16;
+constexpr u32 kCamPosGlobalEA = 0x82DDA8D4;
+constexpr u32 kCamDirGlobalEA = 0x82DDA8E0;
+
+struct CamSave {
+  f32 output[kCamOutputFloats];
+  f32 dir[2];
+  f32 sample[kCamSampleFloats];
+  f32 globals[6];
+  bool valid = false;
+};
+std::unordered_map<u32, CamSave> g_camSaves;
+std::unordered_set<u32> g_evtCameras;
+
+bool CameraGuardable(u32 cam) {
+  return bd::mem::try_at<be_f32>(cam + kCamOutputOffset) &&
+         bd::mem::try_at<be_f32>(cam + kCamOutputOffset +
+                                 (kCamOutputFloats - 1) * 4u) &&
+         bd::mem::try_at<be_f32>(cam + kCamDirOffset + 4) &&
+         bd::mem::try_at<be_f32>(cam + kCamSampleOffset) &&
+         bd::mem::try_at<be_f32>(cam + kCamSampleOffset +
+                                 (kCamSampleFloats - 1) * 4u);
+}
+
+bool CameraOutputFinite(u32 cam) {
+  for (int i = 0; i < kCamOutputFloats; ++i)
+    if (std::isnan(bd::mem::load<f32>(cam + kCamOutputOffset + i * 4u)))
+      return false;
+  for (int i = 0; i < kCamSampleFloats; ++i)
+    if (std::isnan(bd::mem::load<f32>(cam + kCamSampleOffset + i * 4u)))
+      return false;
   return true;
 }
 
-namespace {
-void FlushEvtHidePending() {
-  if (g_evtHidePending.empty())
+void CameraGuardCapture(u32 cam) {
+  if (!CameraGuardable(cam) || !CameraOutputFinite(cam))
+    return;
+  CamSave &s = g_camSaves[cam];
+  for (int i = 0; i < kCamOutputFloats; ++i)
+    s.output[i] = bd::mem::load<f32>(cam + kCamOutputOffset + i * 4u);
+  s.dir[0] = bd::mem::load<f32>(cam + kCamDirOffset);
+  s.dir[1] = bd::mem::load<f32>(cam + kCamDirOffset + 4);
+  for (int i = 0; i < kCamSampleFloats; ++i)
+    s.sample[i] = bd::mem::load<f32>(cam + kCamSampleOffset + i * 4u);
+  for (int i = 0; i < 3; ++i) {
+    s.globals[i] = bd::mem::load<f32>(kCamPosGlobalEA + i * 4u);
+    s.globals[i + 3] = bd::mem::load<f32>(kCamDirGlobalEA + i * 4u);
+  }
+  s.valid = true;
+}
+
+void CameraGuardRepair(u32 cam) {
+  if (!CameraGuardable(cam) || CameraOutputFinite(cam))
+    return;
+  auto it = g_camSaves.find(cam);
+  if (it == g_camSaves.end() || !it->second.valid)
+    return;
+  const CamSave &s = it->second;
+  for (int i = 0; i < kCamOutputFloats; ++i)
+    bd::mem::store<f32>(cam + kCamOutputOffset + i * 4u, s.output[i]);
+  bd::mem::store<f32>(cam + kCamDirOffset, s.dir[0]);
+  bd::mem::store<f32>(cam + kCamDirOffset + 4, s.dir[1]);
+  for (int i = 0; i < kCamSampleFloats; ++i)
+    bd::mem::store<f32>(cam + kCamSampleOffset + i * 4u, s.sample[i]);
+  for (int i = 0; i < 3; ++i) {
+    bd::mem::store<f32>(kCamPosGlobalEA + i * 4u, s.globals[i]);
+    bd::mem::store<f32>(kCamDirGlobalEA + i * 4u, s.globals[i + 3]);
+  }
+}
+
+void DriveEventChildren(u32 evt, f32 frac) {
+  const f32 speed = bd::mem::load<f32>(evt + kEvtSpeedOffset);
+  if (!(speed != 0.0f))
     return;
   auto *dispatcher = REX_KERNEL_STATE()->function_dispatcher();
-  for (const u32 obj : g_evtHidePending) {
-    const u32 vtable = bd::mem::load<u32>(obj);
-    if (vtable == kIssObjectVtableEA) {
-      if (auto *o = bd::mem::at<IssObject_t>(obj)) {
-        if (o->hideArm != 0)
-          o->hideConsume = 0;
+  bd::mem::store<f32>(evt + kEvtSpeedOffset, speed * frac);
+  g_hostEvtDrive = true;
+  g_hostEvtFrac = frac;
+  u32 child = bd::mem::load<u32>(evt + kEvtChildListOffset);
+  for (int guard = 0; child != 0 && guard < 256; ++guard) {
+    const u32 vtable = bd::mem::load<u32>(child);
+    const u32 fn = vtable ? bd::mem::load<u32>(vtable + 8) : 0;
+    if (fn != 0 && IsMovementUpdate(fn)) {
+      if (fn == kIssCameraUpdateEA) {
+        g_evtCameras.insert(child);
+      } else if (auto *host = dispatcher->GetFunction(fn)) {
+        rex::ppc::GuestToHostFunction<void>(host, child);
       }
-    } else if (vtable == kIssActorVtableEA) {
-      if (auto *a = bd::mem::at<IssActor_t>(obj)) {
-        if (a->hideArm != 0) {
-          if (auto *fn = dispatcher->GetFunction(kIssActorHideFnEA))
-            rex::ppc::GuestToHostFunction<void>(fn, obj);
-        }
+    }
+    child = bd::mem::load<u32>(child + kEvtChildNextOffset);
+  }
+  g_hostEvtDrive = false;
+  bd::mem::store<f32>(evt + kEvtSpeedOffset, speed);
+}
+
+void StepEventScenes() {
+  g_evtTickRemainder.clear();
+  if (!bd::engine::InterpolationActive() || !bd::engine::EventScenePlaying()) {
+    g_evtDrive.clear();
+    g_camSaves.clear();
+    g_evtCameras.clear();
+    return;
+  }
+  u32 live[8];
+  const int n = bd::engine::Cutscene().Tasks(live, 8);
+  for (auto it = g_evtDrive.begin(); it != g_evtDrive.end();) {
+    bool alive = false;
+    for (int i = 0; i < n; ++i)
+      alive = alive || live[i] == it->first;
+    if (alive)
+      ++it;
+    else
+      it = g_evtDrive.erase(it);
+  }
+  const bool tick = bd::engine::TickDue();
+  for (int i = 0; i < n; ++i) {
+    const u32 evt = live[i];
+    if (bd::mem::load<u32>(evt + kEvtStateOffset) != kEvtPlaying)
+      continue;
+    EvtDriveState &st = g_evtDrive[evt];
+    if (tick) {
+      const u32 bits = bd::mem::load<u32>(evt + kEvtFrameOffset);
+      st.advancing = st.framesSeen && bits != st.frameBits;
+      st.frameBits = bits;
+      st.framesSeen = true;
+      if (st.drove)
+        g_evtTickRemainder[evt] = std::clamp(1.0f - st.lastAlpha, 0.0f, 1.0f);
+      st.lastAlpha = 0.0f;
+      st.drove = false;
+    } else if (st.advancing) {
+      const f32 a = bd::engine::Alpha();
+      if (a > st.lastAlpha) {
+        DriveEventChildren(evt, a - st.lastAlpha);
+        st.lastAlpha = a;
+        st.drove = true;
       }
     }
   }
-  g_evtHidePending.clear();
 }
+
+struct EvtSpeedRemainder {
+  u32 evt = 0;
+  f32 speed = 0.0f;
+  f32 rem = 1.0f;
+  explicit EvtSpeedRemainder(u32 child) {
+    if (g_evtTickRemainder.empty() || g_hostEvtDrive)
+      return;
+    const u32 parent = bd::mem::load<u32>(child + kEvtChildParentOffset);
+    const auto it = g_evtTickRemainder.find(parent);
+    if (it == g_evtTickRemainder.end())
+      return;
+    evt = parent;
+    rem = it->second;
+    speed = bd::mem::load<f32>(evt + kEvtSpeedOffset);
+    bd::mem::store<f32>(evt + kEvtSpeedOffset, speed * rem);
+  }
+  ~EvtSpeedRemainder() {
+    if (evt != 0)
+      bd::mem::store<f32>(evt + kEvtSpeedOffset, speed);
+  }
+};
+
 } // namespace
+
+REX_EXTERN(__imp__issObject__Update);
+REX_HOOK_RAW(issObject__Update) {
+  EvtSpeedRemainder z(ctx.r3.u32);
+  __imp__issObject__Update(ctx, base);
+}
+
+REX_EXTERN(__imp__issCamera__Update);
+REX_HOOK_RAW(issCamera__Update) {
+  const u32 cam = ctx.r3.u32;
+  const bool guard = bd::engine::InterpolationActive() &&
+                     g_evtCameras.find(cam) != g_evtCameras.end();
+  if (guard)
+    CameraGuardCapture(cam);
+  __imp__issCamera__Update(ctx, base);
+  if (guard)
+    CameraGuardRepair(cam);
+}
+
+REX_EXTERN(__imp__issMap__Update);
+REX_HOOK_RAW(issMap__Update) {
+  EvtSpeedRemainder z(ctx.r3.u32);
+  __imp__issMap__Update(ctx, base);
+}
+
+REX_EXTERN(__imp__issEffect__vf02);
+REX_HOOK_RAW(issEffect__vf02) {
+  EvtSpeedRemainder z(ctx.r3.u32);
+  __imp__issEffect__vf02(ctx, base);
+}
+
+REX_EXTERN(__imp__issSprite__vf02);
+REX_HOOK_RAW(issSprite__vf02) {
+  EvtSpeedRemainder z(ctx.r3.u32);
+  __imp__issSprite__vf02(ctx, base);
+}
+
+REX_EXTERN(__imp__issLight__vf02);
+REX_HOOK_RAW(issLight__vf02) {
+  EvtSpeedRemainder z(ctx.r3.u32);
+  __imp__issLight__vf02(ctx, base);
+}
+
+REX_EXTERN(__imp__issActor__Update);
+REX_HOOK_RAW(issActor__Update) {
+  EvtSpeedRemainder z(ctx.r3.u32);
+  const bool sup = z.evt != 0;
+  if (sup) {
+    g_evtActorSuppressed = true;
+    g_evtActorRemainder = z.rem;
+  }
+  __imp__issActor__Update(ctx, base);
+  if (sup)
+    g_evtActorSuppressed = false;
+}
+
+REX_EXTERN(__imp__Player__Update_vf03);
+REX_HOOK_RAW(Player__Update_vf03) {
+  f32 mul = -1.0f;
+  if (g_hostEvtDrive)
+    mul = g_hostEvtFrac;
+  else if (g_evtActorSuppressed)
+    mul = g_evtActorRemainder;
+  if (mul < 0.0f) {
+    __imp__Player__Update_vf03(ctx, base);
+    return;
+  }
+  const f32 prev = bd::mem::load<f32>(kSceneSpeedMulEA);
+  bd::mem::store<f32>(kSceneSpeedMulEA, prev * mul);
+  __imp__Player__Update_vf03(ctx, base);
+  bd::mem::store<f32>(kSceneSpeedMulEA, prev);
+}
 
 // The blink arm flag is set once per logic tick and consumed by the armed
 // draw, so interpolated frames find it already consumed. Track liveness here
@@ -465,10 +687,6 @@ void bdFaceFrostCaptureHook(PPCRegister &f1, PPCRegister &f2, PPCRegister &f4,
 // bdPushTextPrim takes five doubles and nine integers: r3-r10 then one slot the
 // SDK marshaller places at r1+0x54, read back as the text style word. Only r8
 // (string), r9 (color) and r10 carry meaning here.
-//
-// The replayed label sits at the tick's projected position, so it steps at 30Hz
-// while the camera interpolates. Re-projecting would need the world position
-// and the text width centering the guest applies after it.
 REX_IMPORT(__imp__Visual__method_7E60, ItemDropPushText,
            void(f64, f64, f64, f64, f64, u32, u32, u32, u32, u32, u32, u32, u32,
                 u32));
@@ -644,8 +862,8 @@ void OnGuestGameStep() {
     g_recordKeys.clear();
   }
   g_drawObject = 0;
+  StepEventScenes();
   if (InterpolationActive() && TickDue()) {
-    FlushEvtHidePending();
     ClearLightChangedList();
   }
 }
@@ -698,7 +916,9 @@ REX_HOOK_RAW(bdBuildViewMatrix) {
     switch (AdvanceSnapshot(key, ctx.r3.u32, kWorldFloats, e)) {
     case Snapshot::Rolled: {
       const float step = std::sqrt(EyeDistSq(&e->curr[12], &e->prev[12]));
-      e->cut = step > kCutDistance || StepDiscontinuous(step, e->avgStep) ||
+      e->cut = step > kCutDistance ||
+               (bd::engine::EventScenePlaying() && step > kEventObjCutStep) ||
+               StepDiscontinuous(step, e->avgStep) ||
                MinRowDot(e->curr.data(), e->prev.data()) < kObjCutRotDot ||
                SubTickWriter(*e);
       if (e->cut) {
@@ -774,6 +994,8 @@ REX_HOOK_RAW(bdBuildViewMatrix) {
           EyeFromView(e.currView, ce);
           const float step = std::sqrt(EyeDistSq(pe, ce));
           e.cut = StepDiscontinuous(step, e.avgStep) ||
+                  (bd::engine::EventScenePlaying() &&
+                   step > kEventViewCutStep) ||
                   RotationDiscontinuous(e.currView, e.prevView, kViewCutRotDot);
           if (!e.cut)
             e.avgStep = BlendStep(e.avgStep, step);
@@ -913,7 +1135,8 @@ void bdObjectPaletteInterpHook(PPCRegister &r4, PPCRegister &r5) {
   switch (AdvanceSnapshot(key, r4.u32, floats, e)) {
   case Snapshot::Rolled:
     e->cut = PaletteMaxDelta(e->curr.data(), e->prev.data(), floats) >
-                 kCutDistance ||
+                 (bd::engine::EventScenePlaying() ? kEventObjCutStep
+                                                  : kCutDistance) ||
              SubTickWriter(*e);
     break;
   case Snapshot::Ready:

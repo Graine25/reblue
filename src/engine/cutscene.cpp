@@ -97,6 +97,16 @@ u32 Cutscene::TaskAddress() const {
   return i < 0 ? 0 : g_eventTaskEA[i].load(std::memory_order_acquire);
 }
 
+int Cutscene::Tasks(u32 *out, int max) const {
+  int n = 0;
+  for (const auto &slot : g_eventTaskEA) {
+    const u32 ea = slot.load(std::memory_order_acquire);
+    if (ea != 0 && n < max)
+      out[n++] = ea;
+  }
+  return n;
+}
+
 int Cutscene::EventId() const {
   const int i = FirstLiveSlot();
   return i < 0 ? -1 : g_eventId[i].load(std::memory_order_relaxed);

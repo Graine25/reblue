@@ -29,6 +29,7 @@ public:
 
   int LiveCount() const; // a pack event and a viewEvent can overlap
   u32 TaskAddress() const;
+  int Tasks(u32 *out, int max) const;
   int EventId()
       const; // issEvent+0x3AC, eventNumber*100 + sceneNumber, -1 if none
   int EventNumber() const;

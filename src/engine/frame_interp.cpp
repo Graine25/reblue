@@ -824,7 +824,10 @@ struct ItemDropTextCapture {
   u64 tick = ~0ull;
   u32 count = 0;
   u32 textEA = 0;
+  double time = 0.0;
+  bool prevValid = false;
   ItemDropTextPrim prims[kItemDropTextPrims];
+  ItemDropTextPrim prevPrims[kItemDropTextPrims];
 };
 
 ItemDropTextCapture g_itemDropText;
@@ -847,29 +850,33 @@ bool CopyGuestWideString(u32 srcVa, u32 dstVa) {
 
 } // namespace
 
-void bdItemDropTextCaptureHook(PPCRegister &f1, PPCRegister &f2,
+bool bdItemDropTextCaptureHook(PPCRegister &f1, PPCRegister &f2,
                                PPCRegister &f3, PPCRegister &f4,
                                PPCRegister &f5, PPCRegister &r8,
                                PPCRegister &r9, PPCRegister &r10) {
   if (!bd::engine::InterpolationActive())
-    return;
+    return false;
   auto &cap = g_itemDropText;
   const u64 tick = bd::engine::TickCount();
   if (cap.tick != tick) {
+    cap.prevValid = tick == cap.tick + 1 && cap.count == kItemDropTextPrims;
+    if (cap.prevValid)
+      std::copy(cap.prims, cap.prims + kItemDropTextPrims, cap.prevPrims);
     cap.tick = tick;
     cap.count = 0;
+    cap.time = bd::engine::FrameTime();
   }
   if (cap.count >= kItemDropTextPrims)
-    return;
+    return false;
   if (cap.textEA == 0) {
     cap.textEA = bd::gpu::HostHeap::Get().AllocGuest(
         static_cast<u32>(kItemDropTextChars * sizeof(be_u16)), 4);
     if (cap.textEA == 0)
-      return;
+      return false;
   }
   if (cap.count == 0 && !CopyGuestWideString(r8.u32, cap.textEA)) {
     cap.tick = ~0ull;
-    return;
+    return false;
   }
   auto &prim = cap.prims[cap.count++];
   prim.x = f1.f64;
@@ -879,22 +886,30 @@ void bdItemDropTextCaptureHook(PPCRegister &f1, PPCRegister &f2,
   prim.h = f5.f64;
   prim.color = r9.u32;
   prim.mode = r10.u32;
+  return true;
 }
 
 // Before bdPrimFlush, so the re-issued prims join this frame's 2D pass ahead
 // of the slot flip. The frost quad's own replay site exists only while a
 // dialogue portrait window does.
 void bdItemDropTextReplayHook() {
-  if (!bd::engine::InterpolationActive() || bd::engine::TickDue())
+  if (!bd::engine::InterpolationActive())
     return;
-  if (g_itemDropText.tick != bd::engine::TickCount() ||
-      !g_itemDropText.textEA || g_itemDropText.count == 0)
+  const auto &cap = g_itemDropText;
+  if (cap.tick != bd::engine::TickCount() || !cap.textEA || cap.count == 0)
     return;
-  for (u32 i = 0; i < g_itemDropText.count; ++i) {
-    const auto &prim = g_itemDropText.prims[i];
+  const f64 a = cap.prevValid ? EntityAlpha(cap.time) : 1.0;
+  for (u32 i = 0; i < cap.count; ++i) {
+    const auto &curr = cap.prims[i];
+    const auto &prev = cap.prevValid ? cap.prevPrims[i] : curr;
+    const u32 currA = curr.color >> 24;
+    const u32 prevA = cap.prevValid ? prev.color >> 24 : currA;
+    const u32 alpha = prevA + static_cast<u32>((f64(currA) - f64(prevA)) * a);
+    const u32 color = (alpha << 24) | (curr.color & 0x00FFFFFF);
     PrimSelectTexture(0, 0);
-    ItemDropPushText(prim.x, prim.y, prim.z, prim.w, prim.h, 0, 0, 0, 0, 0,
-                     g_itemDropText.textEA, prim.color, prim.mode, 0);
+    ItemDropPushText(prev.x + (curr.x - prev.x) * a,
+                     prev.y + (curr.y - prev.y) * a, curr.z, curr.w, curr.h, 0,
+                     0, 0, 0, 0, cap.textEA, color, curr.mode, 0);
   }
 }
 

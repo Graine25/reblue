@@ -208,6 +208,7 @@ address = 0x822FC280
 name = "bdItemDropTextCaptureHook"
 registers = ["f1", "f2", "f3", "f4", "f5", "r8", "r9", "r10"]
 after_instruction = false
+jump_address_on_true = 0x822FC284
 
 # Main text pass, same string, white with the fade alpha in the high byte.
 [[midasm_hook]]
@@ -215,6 +216,7 @@ address = 0x822FC2AC
 name = "bdItemDropTextCaptureHook"
 registers = ["f1", "f2", "f3", "f4", "f5", "r8", "r9", "r10"]
 after_instruction = false
+jump_address_on_true = 0x822FC2B0
 
 # Re-issue the captured label on interpolated frames, immediately before
 # bdFrameSubmit's bdPrimFlush call so the prims join this frame's 2D pass and

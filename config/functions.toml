@@ -11,6 +11,7 @@
 0x82403E30 = { name = "issCamera__ProcessCommand" }
 0x82401448 = { name = "issFrame__Draw" }
 0x824025A8 = { name = "issFrame__DrawFade" }
+0x822C1810 = { name = "LipPlayerSample" }
 0x82576028 = { name = "bdPhysicalVertexBufferCreate" }
 0x82575F90 = { name = "bdPhysicalIndexBufferCreate" }
 0x820C03A0 = { name = "SequenceHolder_SequenceUnitBase_ctor", size = 0x80 }
@@ -967,7 +968,7 @@
 0x822BE9B0 = { name = "bdItemModelLoad", size = 0x198 }
 0x822C04A8 = { name = "Chara_AddStatus" }
 0x822C08F8 = { name = "bdEventFindEntry", size = 0xD8 }
-0x822C1A60 = { name = "AnimeData_method_1A60", size = 0x474 }
+0x822C1A60 = { name = "LipPlayerApply", size = 0x474 }
 0x822C1F50 = { name = "bdMotionCmdLoad", size = 0x364 }
 0x822C4DC0 = { name = "Chara_SetTimedEffect" }
 0x822C61A8 = { name = "rex_BattleCharaTask_Construct", size = 0x464 }

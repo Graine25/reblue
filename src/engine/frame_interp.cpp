@@ -584,6 +584,73 @@ REX_HOOK_RAW(issCamera__ProcessCommand) {
   }
 }
 
+constexpr u32 kLipClipOffset = 4;
+constexpr u32 kLipCursorOffset = 8;
+constexpr u32 kLipVisemeOffset = 48;
+constexpr u32 kLipAmpOffset = 52;
+constexpr u32 kLipOwnerOffset = 80;
+constexpr u32 kLipClipCountOffset = 68;
+constexpr u32 kLipRecordStride = 16;
+constexpr u32 kLipRecordLevelOffset = 8;
+constexpr u32 kLipBlendOffset = 2108;
+constexpr u32 kLipPrevVisemeOffset = 49;
+
+namespace {
+f64 LipStaircase(f64 db) {
+  if (db >= -15.0)
+    return 1.0;
+  if (db < -40.0)
+    return 0.4;
+  return 1.0 + std::floor((db + 15.0) / 5.0) * 0.1;
+}
+
+f64 LipContinuous(f64 db) {
+  return std::clamp(0.4 + (db + 45.0) * (0.6 / 30.0), 0.4, 1.0);
+}
+} // namespace
+
+REX_EXTERN(__imp__LipPlayerApply);
+REX_HOOK_RAW(LipPlayerApply) {
+  const u32 player = ctx.r3.u32;
+  const u32 prevVis = bd::mem::try_load<u8>(player + kLipPrevVisemeOffset);
+  const u32 owner = bd::mem::try_load<u32>(player + kLipOwnerOffset);
+  const f32 blendBefore = bd::mem::try_load<f32>(owner + kLipBlendOffset);
+  __imp__LipPlayerApply(ctx, base);
+  if (!bd::engine::InterpolationActive())
+    return;
+  const u32 vis = bd::mem::try_load<u8>(player + kLipVisemeOffset);
+  if (vis != prevVis && vis != 0 && prevVis != 0)
+    bd::mem::try_store<f32>(owner + kLipBlendOffset, blendBefore);
+}
+
+REX_EXTERN(__imp__LipPlayerSample);
+REX_HOOK_RAW(LipPlayerSample) {
+  const u32 player = ctx.r3.u32;
+  __imp__LipPlayerSample(ctx, base);
+  if (!bd::engine::InterpolationActive() || !bd::engine::EventScenePlaying())
+    return;
+  const u32 clip = bd::mem::try_load<u32>(player + kLipClipOffset);
+  if (bd::mem::try_load<u32>(player) != 1 || clip == 0)
+    return;
+  const f32 cursor = bd::mem::try_load<f32>(player + kLipCursorOffset);
+  const u32 data = bd::mem::try_load<u32>(clip);
+  const u32 count = bd::mem::try_load<u32>(clip + kLipClipCountOffset);
+  const u32 idx = u32(cursor) * 2;
+  if (data == 0 || idx >= count)
+    return;
+  const u32 next = idx + 2 < count ? idx + 2 : idx;
+  const f64 db0 = i32(bd::mem::try_load<u32>(data + kLipRecordStride * idx +
+                                             kLipRecordLevelOffset));
+  const f64 db1 = i32(bd::mem::try_load<u32>(data + kLipRecordStride * next +
+                                             kLipRecordLevelOffset));
+  const f64 frac = cursor - std::floor(cursor);
+  const f64 cont =
+      LipContinuous(db0) + (LipContinuous(db1) - LipContinuous(db0)) * frac;
+  const f32 amp = bd::mem::try_load<f32>(player + kLipAmpOffset);
+  bd::mem::try_store<f32>(player + kLipAmpOffset,
+                          f32(cont * (amp / LipStaircase(db0))));
+}
+
 REX_EXTERN(__imp__issObject__Update);
 REX_HOOK_RAW(issObject__Update) {
   EvtSpeedRemainder z(ctx.r3.u32);

@@ -723,6 +723,38 @@ REX_HOOK_RAW(Player__Update_vf03) {
   bd::mem::store<f32>(kSceneSpeedMulEA, prev);
 }
 
+namespace {
+constexpr u32 kPlyBlinkArmOffset = 10432;
+constexpr u32 kPlyBlinkAlphaOffset = 3136;
+constexpr u32 kPlyBlinkAlphaDirtyOffset = 3156;
+constexpr f32 kPlyBlinkAlpha = 0.5f;
+constexpr u64 kPlyBlinkWindowTicks = 2;
+
+struct PlyBlinkState {
+  u64 tick = 0;
+  f32 alpha = 1.0f;
+  u32 dirty = 0;
+  bool held = false;
+};
+std::unordered_map<u32, PlyBlinkState> g_plyBlinkWindow;
+
+void FlushPlyBlinkWindow() {
+  const u64 tick = bd::engine::TickCount();
+  for (auto it = g_plyBlinkWindow.begin(); it != g_plyBlinkWindow.end();) {
+    if (it->second.held) {
+      bd::mem::store<f32>(it->first + kPlyBlinkAlphaOffset, it->second.alpha);
+      bd::mem::store<u32>(it->first + kPlyBlinkAlphaDirtyOffset,
+                          it->second.dirty);
+      it->second.held = false;
+    }
+    if (tick - it->second.tick > kPlyBlinkWindowTicks)
+      it = g_plyBlinkWindow.erase(it);
+    else
+      ++it;
+  }
+}
+} // namespace
+
 // The blink arm flag is set once per logic tick and consumed by the armed
 // draw, so interpolated frames find it already consumed. Track liveness here
 // and force the armed path while a blink is active.
@@ -950,6 +982,7 @@ void OnGuestGameStep() {
   g_drawObject = 0;
   StepEventScenes();
   if (InterpolationActive() && TickDue()) {
+    FlushPlyBlinkWindow();
     ClearLightChangedList();
   }
 }
@@ -1113,6 +1146,33 @@ REX_HOOK_RAW(bdBuildViewMatrix) {
     }
   }
   __imp__bdBuildViewMatrix(ctx, base);
+}
+
+REX_EXTERN(__imp__PlyTask__vf03);
+REX_HOOK_RAW(PlyTask__vf03) {
+  if (bd::engine::InterpolationActive()) {
+    const u32 task = ctx.r3.u32;
+    const u32 arm = bd::mem::load<u32>(task + kPlyBlinkArmOffset);
+    if (arm == 1) {
+      bd::mem::store<u32>(task + kPlyBlinkArmOffset, 0);
+      g_plyBlinkWindow[task].tick = bd::engine::TickCount();
+    }
+    if (arm <= 1) {
+      auto it = g_plyBlinkWindow.find(task);
+      if (it != g_plyBlinkWindow.end() && !it->second.held) {
+        const f32 cur = bd::mem::load<f32>(task + kPlyBlinkAlphaOffset);
+        if (cur > kPlyBlinkAlpha) {
+          it->second.alpha = cur;
+          it->second.dirty =
+              bd::mem::load<u32>(task + kPlyBlinkAlphaDirtyOffset);
+          it->second.held = true;
+          bd::mem::store<f32>(task + kPlyBlinkAlphaOffset, kPlyBlinkAlpha);
+          bd::mem::store<u32>(task + kPlyBlinkAlphaDirtyOffset, 1);
+        }
+      }
+    }
+  }
+  __imp__PlyTask__vf03(ctx, base);
 }
 
 REX_EXTERN(__imp__D2AnimeTask_Draw);

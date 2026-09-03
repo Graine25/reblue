@@ -361,8 +361,9 @@ bool Video::CreateHostDevice(rex::ui::Window *window) {
 
     // kNumFrames + 1: a flip model swapchain needs one back buffer beyond the
     // frames in flight so acquiring N+1 never waits on scanout.
-    plume::RenderSwapChainDesc desc(
-        render_window, plume::RenderFormat::B8G8R8A8_UNORM, kNumFrames + 1);
+    plume::RenderSwapChainDesc desc(render_window,
+                                    plume::RenderFormat::B8G8R8A8_UNORM,
+                                    kNumFrames + 1, false, kNumFrames);
     s.swap_chain = s.queue->createSwapChain(desc);
 #if !defined(REBLUE_D3D12)
     // plume's VulkanSwapChain defers VkSwapchain creation to resize(), so a

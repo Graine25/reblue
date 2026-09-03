@@ -1652,7 +1652,7 @@ decline.it = "Più tardi"
 decline.po = "Agora Não"
 
 [installer.steam]
-checkbox.us = "Add re:Blue to Steam"
+armed.us = "Will be added to Steam"
 hint.us = "Adds re:Blue as a non-Steam game for the first local Steam user. Close Steam before installing."
 added.us = "Added re:Blue to Steam. Restart Steam to see it in your library."
 not_found.us = "Could not add the Steam shortcut because Steam was not found."

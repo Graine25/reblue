@@ -606,10 +606,6 @@ void InstallerWizard::DrawContent() {
                T(repair_ ? "installer.hint.existing" : "installer.hint.space"),
                install_dir_, "install_dir", [this]() { PickInstallDir(); });
 
-  ImGui::Checkbox(T("installer.steam.checkbox"), &add_steam_shortcut_);
-  if (ImGui::IsItemHovered())
-    ImGui::SetTooltip("%s", T("installer.steam.hint"));
-
   ImGui::Dummy(ImVec2(0, 10));
   DrawDLCSection();
   DrawFooter();
@@ -751,26 +747,17 @@ void InstallerWizard::DrawFooter() {
   if (ImGui::Button(T("installer.button.back"), kButton))
     page_ = Page::Content;
 
-  // Repair mode offers two more ways on: an install whose discs still check
-  // out can boot without copying anything, and re-adding the Steam shortcut
-  // needs no disc pass at all.
-  // Wider than the others: "Add to Steam" clips at kButtonWidth.
-  constexpr float kSteamWidth = 160.0f;
+  // Repair mode offers one more way on: an install whose discs still check out
+  // can boot without copying anything. Adding the Steam shortcut lives under
+  // Preferences now, so the footer no longer carries a button for it.
   float forward_width = kButtonWidth;
   if (repair_)
-    forward_width += kGap + kButtonWidth + kGap + kSteamWidth;
+    forward_width += kGap + kButtonWidth;
   ImGui::SameLine();
   ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
                        ImGui::GetContentRegionAvail().x - forward_width);
 
   if (repair_) {
-    // Dimmed unless the checkbox on the first page is checked, so the button
-    // does not read as available independently of that intent.
-    ImGui::BeginDisabled(!add_steam_shortcut_);
-    if (ImGui::Button(T("installer.button.add_steam"), ImVec2(kSteamWidth, 0)))
-      AddSteamShortcutOnly();
-    ImGui::EndDisabled();
-    ImGui::SameLine(0, kGap);
     if (ImGui::Button(T("installer.button.done"), kButton))
       StartIndexRebuild();
     ImGui::SameLine(0, kGap);
@@ -882,6 +869,21 @@ void InstallerWizard::DrawPreferences() {
     if (ImGui::Checkbox(T("installer.option.reset_config"), &reset_config_))
       choices_.reset_config = reset_config_;
   }
+
+  // Repair already has an install on disk, so the shortcut can be written the
+  // moment it is asked for. A fresh install has nothing to point Steam at yet,
+  // so the button arms the shortcut instead and the install writes it on the
+  // way out; the label carries that difference.
+  if (repair_) {
+    if (ImGui::Button(T("installer.button.add_steam")))
+      AddSteamShortcutOnly();
+  } else {
+    if (ImGui::Button(add_steam_shortcut_ ? T("installer.steam.armed")
+                                          : T("installer.button.add_steam")))
+      add_steam_shortcut_ = !add_steam_shortcut_;
+  }
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("%s", T("installer.steam.hint"));
 }
 
 void InstallerWizard::DrawInstalling() {

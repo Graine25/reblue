@@ -70,6 +70,7 @@ struct PerfSample {
   u32 surf_free = 0;
   u64 surf_hits = 0;
   u64 surf_misses = 0;
+  u64 surf_parked_bytes = 0;
 
   u8 state = 0;
 };
@@ -114,6 +115,7 @@ struct PerfSample {
   X(surf_free, "surf_free", U32)                                               \
   X(surf_hits, "surf_hits", U64)                                               \
   X(surf_misses, "surf_misses", U64)                                           \
+  X(surf_parked_bytes, "surf_parked_bytes", U64)                               \
   X(state, "state", U8)
 
 std::string PerfCSVHeader();

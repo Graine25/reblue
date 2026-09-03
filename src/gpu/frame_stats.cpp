@@ -183,6 +183,7 @@ void RecordFrameSample(const PresentBreakdown &b) {
     g_mem_carry.surf_free = ps.free_count;
     g_mem_carry.surf_hits = ps.hits;
     g_mem_carry.surf_misses = ps.misses;
+    g_mem_carry.surf_parked_bytes = ps.parked_bytes;
     g_mem_carry.sys_heap_bytes = 0;
     if (auto *mem = REX_KERNEL_MEMORY()) {
       if (const auto *sysheap = mem->LookupHeap(0x00100000u)) {
@@ -199,6 +200,7 @@ void RecordFrameSample(const PresentBreakdown &b) {
   s.surf_free = g_mem_carry.surf_free;
   s.surf_hits = g_mem_carry.surf_hits;
   s.surf_misses = g_mem_carry.surf_misses;
+  s.surf_parked_bytes = g_mem_carry.surf_parked_bytes;
   s.state = CurrentSceneState();
 
   PerfPush(s);

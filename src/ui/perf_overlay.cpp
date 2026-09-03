@@ -204,13 +204,13 @@ void PerfOverlay::DrawGraphs(ImGuiIO &io) {
   fill(a1, [](S s) { return f32(s.heap_allocated) / kMiB; });
   fill(a2, [](S s) { return f32(s.heap_peak) / kMiB; });
   fill(a3, [](S s) { return f32(s.sys_heap_bytes) / kMiB; });
-  fill(a4, [](S s) { return f32(s.surf_free); });
+  fill(a4, [](S s) { return f32(s.surf_parked_bytes) / kMiB; });
   if (ImPlot::BeginPlot("memory (MiB)", size, kFlags)) {
     ImPlot::SetupAxes("s", nullptr, kAx, kAx);
     ImPlot::PlotLine("heap", t.data(), a1.data(), int(pts));
     ImPlot::PlotLine("peak", t.data(), a2.data(), int(pts));
     ImPlot::PlotLine("sys", t.data(), a3.data(), int(pts));
-    ImPlot::PlotLine("surf free", t.data(), a4.data(), int(pts));
+    ImPlot::PlotLine("surf parked", t.data(), a4.data(), int(pts));
     ImPlot::EndPlot();
   }
 

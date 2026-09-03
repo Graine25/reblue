@@ -45,15 +45,10 @@ constexpr size_t kCountCap = 1024;
 // cheaper is parked.
 constexpr u64 kLargeSurfaceBytes = 16ull * 1024 * 1024;
 
-// Auto budget = VRAM * kAutoBudgetNum / kAutoBudgetDen, clamped. Returns land
-// a frame or two behind the acquire that replaces them, so a key needs two
-// copies parked to hit. At 4x SSAA and 4K one copy of the scene pair plus the
-// shadow map is ~2.5 GiB, so a quarter of a 16 GiB card parks one and
-// recreates the other every frame. Three eighths clears two.
 constexpr u64 kAutoBudgetMin = 512ull * 1024 * 1024;
-constexpr u64 kAutoBudgetMax = 10240ull * 1024 * 1024;
-constexpr u64 kAutoBudgetNum = 3;
-constexpr u64 kAutoBudgetDen = 8;
+constexpr u64 kAutoBudgetMax = 4096ull * 1024 * 1024;
+constexpr u64 kAutoBudgetNum = 1;
+constexpr u64 kAutoBudgetDen = 4;
 // A key acquired this recently is live working set: its last parked copy is not
 // spare capacity, since dropping it buys a guaranteed recreate next frame. Well
 // above one frame's churn (~20-35 parks).
@@ -64,7 +59,7 @@ constexpr u64 kHotEpochs = 1024;
 // skipping its one recreate.
 constexpr auto kIdleTrimAge = std::chrono::seconds(120);
 // Below this parked total the spares are not worth reclaiming.
-constexpr u64 kIdleTrimFloorBytes = 256ull * 1024 * 1024;
+constexpr u64 kIdleTrimFloorBytes = 128ull * 1024 * 1024;
 constexpr auto kIdleTrimCadence = std::chrono::seconds(1);
 
 u64 MakeKey(u32 width, u32 height, u32 plume_format, u32 sample_count,

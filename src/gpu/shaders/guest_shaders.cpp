@@ -36,6 +36,10 @@
 #include "src/gpu/shaders/hlsl/bd_pe_ps_brightpass_clamp.hlsl.spirv.h"
 #include "src/gpu/shaders/hlsl/bd_pe_ps_ms_bright_clamp.hlsl.spirv.h"
 #include <smolv.h>
+#if defined(REBLUE_SHADERGEN)
+#include <plume_vulkan.h>
+#include <rex/shadergen/moltenvk.h>
+#endif
 #endif
 
 namespace bd::gpu {
@@ -133,6 +137,56 @@ const u8 *SpirvCache() {
   });
   return g_spirv_cache.get();
 }
+
+#if defined(REBLUE_SHADERGEN)
+// rexglue-shadergen's modules keep the Xbox 360's float results bit for bit:
+// nothing is contracted (SPIR-V NoContraction) and the modules flush denormal
+// operands themselves. SPIRV-Cross prints each NoContraction operation as a
+// call to an [[clang::optnone]] helper, which made the pixel shaders about 10x
+// slower than XenosRecomp's on MoltenVK. shadergen's MoltenVK transform
+// rewrites a module into one Metal computes the same way without those calls.
+// On an Apple GPU it also lets the GPU's own denormal flushing replace the
+// module's (the denormal gate, SpecId 1, becomes the constant 1), with the
+// same results. Every other driver gets the modules as they were built.
+struct MoltenVkShaderPrep {
+  bool enabled = false;
+  sg::MoltenVkOptions options;
+};
+
+const MoltenVkShaderPrep &MoltenVkShaderPrepFor(plume::RenderDevice *device) {
+  static const MoltenVkShaderPrep prep = [device] {
+    MoltenVkShaderPrep p;
+    auto *dev = static_cast<plume::VulkanDevice *>(device);
+    VkPhysicalDeviceDriverProperties driver = {};
+    driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+    VkPhysicalDeviceProperties2 props = {};
+    props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    props.pNext = &driver;
+    vkGetPhysicalDeviceProperties2(dev->physicalDevice, &props);
+    // driverID stays 0 below Vulkan 1.2, where an Apple build is MoltenVK.
+    p.enabled = sg::IsMoltenVk(driver.driverID, g_mvk);
+    if (p.enabled) {
+      p.options = sg::MoltenVkOptionsFor(props.properties.vendorID);
+      BD_INFO("Guest shaders: shadergen MoltenVK transform on (vendor 0x{:X}, "
+              "device denormal flush {})",
+              props.properties.vendorID,
+              p.options.device_flushes_denormals ? "on" : "off");
+    }
+    return p;
+  }();
+  return prep;
+}
+
+void PrepareGuestSpirv(plume::RenderDevice *device, std::vector<u32> &spirv,
+                       u64 hash) {
+  const MoltenVkShaderPrep &prep = MoltenVkShaderPrepFor(device);
+  if (prep.enabled && !sg::PrepareSpirvForMoltenVk(spirv, prep.options)) {
+    BD_WARN("GetOrLinkShader: SPIR-V not parsed, MoltenVK transform skipped "
+            "(hash=0x{:016X})",
+            hash);
+  }
+}
+#endif
 #endif
 
 // X360 exports BD's bloom bright mask into an LDR EDRAM tile, saturating it at
@@ -219,16 +273,21 @@ plume::RenderShader *GetOrLinkShader(GuestShader *gs, u32 specConstants) {
   if (!cache)
     return nullptr;
   const u8 *smol = cache + entry->spirvOffset;
-  std::vector<u8> spirv(smolv::GetDecodedBufferSize(smol, entry->spirvSize));
-  if (spirv.empty() ||
-      !smolv::Decode(smol, entry->spirvSize, spirv.data(), spirv.size())) {
+  // SPIR-V is a stream of 32-bit words.
+  std::vector<u32> spirv(smolv::GetDecodedBufferSize(smol, entry->spirvSize) /
+                         sizeof(u32));
+  if (spirv.empty() || !smolv::Decode(smol, entry->spirvSize, spirv.data(),
+                                      spirv.size() * sizeof(u32))) {
     BD_ERROR("GetOrLinkShader: SPIR-V decode failed (hash=0x{:016X})",
              entry->hash);
     return nullptr;
   }
-  return PublishShader(gs,
-                       device->createShader(spirv.data(), spirv.size(), "main",
-                                            plume::RenderShaderFormat::SPIRV));
+#if defined(REBLUE_SHADERGEN)
+  PrepareGuestSpirv(device, spirv, entry->hash);
+#endif
+  return PublishShader(gs, device->createShader(
+                               spirv.data(), spirv.size() * sizeof(u32),
+                               "main", plume::RenderShaderFormat::SPIRV));
 #else
   const u8 *cache = DxilCache();
   if (!cache)

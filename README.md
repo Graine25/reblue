@@ -144,6 +144,8 @@ cmake --preset mac-arm64-release -Drexglue-shadergen_DIR=<package dir>
 
 A build directory keeps the recompiler it was first configured with. `-DREBLUE_SHADERGEN=ON` asks for `rexglue-shadergen` and stops the configure when the tool is missing, and `-DREBLUE_SHADERGEN=OFF` selects XenosRecomp. Either way, the `reblue_shader_hlsl_dump` target writes the recompiled HLSL to `REBLUE_HLSL_DUMP_DIR`.
 
+On macOS, the game runs each recompiled shader through the recompiler's MoltenVK transform (`rex/shadergen/moltenvk.h`) before handing it to the driver. The transform lets Metal compile the shaders efficiently without changing their results.
+
 ## Credits
 
 Huge thanks to everyone who has put time into this. re:Blue would not be where it is without you.

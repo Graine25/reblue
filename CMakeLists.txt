@@ -210,6 +210,12 @@ foreach(target IN LISTS REBLUE_TARGETS)
     if(WIN32)
         target_link_libraries(${target} PRIVATE winmm ole32 uuid winhttp shell32)
     endif()
+    # guest_shaders.cpp hands shadergen's modules to its MoltenVK transform
+    # (rex/shadergen/moltenvk.h) when the device is MoltenVK.
+    if(REBLUE_SHADERGEN)
+        target_compile_definitions(${target} PRIVATE REBLUE_SHADERGEN)
+        target_link_libraries(${target} PRIVATE rex::shadergen-runtime)
+    endif()
 endforeach()
 
 # The SDK stages the same runtime DLLs next to every host exe it configures, so

@@ -52,6 +52,29 @@ include(generated/rexglue.cmake)
 if(WIN32)
     find_package(directx-dxc CONFIG REQUIRED)
 endif()
+# The shaders are recompiled with rexglue-shadergen wherever the build can find
+# it, and with XenosRecomp otherwise. An SDK that ships rexglue-shadergen brings
+# the tool and rexglue_add_shader_cache() with it. Older ones leave both to the
+# tool's standalone package (rexglue-shadergen_DIR). Only a REBLUE_SHADERGEN=ON
+# that was asked for, or kept from an earlier configure, requires the tool.
+if(NOT TARGET rex::rexglue-shadergen AND (NOT DEFINED REBLUE_SHADERGEN OR REBLUE_SHADERGEN))
+    find_package(rexglue-shadergen CONFIG QUIET)
+endif()
+if(TARGET rex::rexglue-shadergen OR rexglue-shadergen_FOUND)
+    set(REBLUE_SHADERGEN_AVAILABLE ON)
+else()
+    set(REBLUE_SHADERGEN_AVAILABLE OFF)
+endif()
+if(REBLUE_SHADERGEN AND NOT REBLUE_SHADERGEN_AVAILABLE)
+    message(FATAL_ERROR
+        "REBLUE_SHADERGEN is ON but rexglue-shadergen was not found. Set "
+        "rexglue-shadergen_DIR to its package (an SDK build's rexglue-shadergen "
+        "folder, or <prefix>/lib/cmake/rexglue-shadergen), or configure with "
+        "-DREBLUE_SHADERGEN=OFF to recompile the shaders with XenosRecomp.")
+endif()
+option(REBLUE_SHADERGEN
+    "Recompile the Xenos shaders with rexglue-shadergen (OFF uses XenosRecomp)"
+    ${REBLUE_SHADERGEN_AVAILABLE})
 add_subdirectory(thirdparty)
 
 foreach(target IN LISTS REBLUE_TARGETS)

@@ -136,6 +136,14 @@ cmake --build --preset win-amd64-release
 
 Presets cover `win-amd64`, `win-vk`, `linux-amd64`, `linux-arm64`, `mac-amd64`, and `mac-arm64`, each in Debug, Release, and RelWithDebInfo. A `win-amd64` preset builds both the DX12 executable (`reblue.exe`) and the Vulkan one (`reblue_vk.exe`), and a `win-vk` one builds the Vulkan executable alone. As with running the game, building requires the files from your own copy of Blue Dragon.
 
+The build recompiles the game's shaders with `rexglue-shadergen`, the SDK's offline shader recompiler, when it can find the tool, and with the XenosRecomp submodule otherwise. An SDK that ships the tool provides it. With an older SDK, point `rexglue-shadergen_DIR` at the tool's standalone package: an SDK build's `rexglue-shadergen` folder, or `lib/cmake/rexglue-shadergen` in an install.
+
+```sh
+cmake --preset mac-arm64-release -Drexglue-shadergen_DIR=<package dir>
+```
+
+A build directory keeps the recompiler it was first configured with. `-DREBLUE_SHADERGEN=ON` asks for `rexglue-shadergen` and stops the configure when the tool is missing, and `-DREBLUE_SHADERGEN=OFF` selects XenosRecomp. Either way, the `reblue_shader_hlsl_dump` target writes the recompiled HLSL to `REBLUE_HLSL_DUMP_DIR`.
+
 ## Credits
 
 Huge thanks to everyone who has put time into this. re:Blue would not be where it is without you.

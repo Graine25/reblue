@@ -7,13 +7,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/shaders.cmake")
 # command line, so every commit would rebuild the whole target.
 reblue_write_build_info("${REBLUE_GEN_DIR}/core/build_info.h")
 
-reblue_shader_cache(
-    RECOMP_TARGET XenosRecomp
-    INPUT_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-    INCLUDE_FILE  "${REBLUE_SHADER_COMMON_H}"
-    OUTPUT_CPP    "${REBLUE_GEN_DIR}/shader_cache.cpp")
-set(REBLUE_GENERATED_SOURCES "${REBLUE_GEN_DIR}/shader_cache.cpp")
-
 foreach(shader IN ITEMS copy_vs bd_2d_blit_vs imgui_vs)
     reblue_host_shader(${shader} vs_6_0)
 endforeach()
@@ -38,7 +31,6 @@ reblue_embed_directory(
     HEADER      "${REBLUE_GEN_DIR}/embedded.h"
     SOURCES_VAR REBLUE_EMBEDDED_SOURCES
     SKIP_DIRS   ${embed_skip})
-list(APPEND REBLUE_GENERATED_SOURCES ${REBLUE_EMBEDDED_SOURCES})
 
 # Neither the recompiled guest code nor these data blobs read REBLUE_D3D12, so
 # both exes link one set of objects instead of paying for 54 recomp TUs and a
@@ -76,8 +68,22 @@ if(REXGLUE_ENTRYPOINT_GENERATED_SOURCES)
     set(REBLUE_RECOMP_LIB reblue_recomp)
 endif()
 
-reblue_generated_object_library(reblue_generated ${REBLUE_GENERATED_SOURCES})
-add_dependencies(reblue_generated reblue_shader_cache_gen)
+reblue_generated_object_library(reblue_generated ${REBLUE_EMBEDDED_SOURCES})
+reblue_shader_cache(
+    TARGET        reblue_generated
+    RECOMP_TARGET XenosRecomp
+    INPUT_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    INCLUDE_FILE  "${REBLUE_SHADER_COMMON_H}"
+    OUTPUT_CPP    "${REBLUE_GEN_DIR}/shader_cache.cpp")
+if(REBLUE_SHADERGEN)
+    # Fails the build when SharedConstants drifts from the shared block the
+    # recompiled shaders read. reblue_common resolves the header's includes.
+    rexglue_shadergen_abi_check(reblue_common
+        HEADER  "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/constant_buffers.h"
+        INCLUDE gpu/constant_buffers.h
+        STRUCT  bd::gpu::SharedConstants
+        PROFILE xr-reblue)
+endif()
 
 # rexglue_setup_target adds the entrypoint sources to whatever target it is
 # called on, which would compile them again into each exe.

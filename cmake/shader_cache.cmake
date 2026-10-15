@@ -20,10 +20,12 @@ function(reblue_shader_cache)
         # or changed asset reruns it without a reconfigure. INCLUDE_FILE is only
         # checked against the profile, not read. XenosRecomp's cache layout has
         # no part units, and the per-shader artefact cache stays in the build
-        # tree rather than the user's home.
+        # tree rather than the user's home. REBLUE_SHADERGEN_OVERLAY holds
+        # reblue's semantic choices over the profile (shadergen.toml).
         rexglue_add_shader_cache(reblue_shader_cache
             INPUTS       "${ARG_INPUT_DIR}"
             PROFILE      xr-reblue
+            OVERLAYS     ${REBLUE_SHADERGEN_OVERLAY}
             OUTPUT       "${ARG_OUTPUT_CPP}"
             PARTS        0
             HOST_INCLUDE "${ARG_INCLUDE_FILE}"

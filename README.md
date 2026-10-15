@@ -144,7 +144,15 @@ cmake --preset mac-arm64-release -Drexglue-shadergen_DIR=<package dir>
 
 A build directory keeps the recompiler it was first configured with. `-DREBLUE_SHADERGEN=ON` asks for `rexglue-shadergen` and stops the configure when the tool is missing, and `-DREBLUE_SHADERGEN=OFF` selects XenosRecomp. Either way, the `reblue_shader_hlsl_dump` target writes the recompiled HLSL to `REBLUE_HLSL_DUMP_DIR`.
 
+re:Blue's choices for the recompiler live in `shadergen.toml`. Its defaults make the shaders compute what Xenia computes for the Xbox 360 GPU, bit for bit. Each setting in it can trade that exactness for speed, and its comments explain what each one changes and what it cost on an Apple M2. To build with a different file, for example a second build directory to compare against, pass it as `REBLUE_SHADERGEN_OVERLAY`:
+
+```sh
+cmake --preset mac-arm64-release -B out/build/mac-arm64-release-fast -DREBLUE_SHADERGEN_OVERLAY=<file>
+```
+
 On macOS, the game runs each recompiled shader through the recompiler's MoltenVK transform (`rex/shadergen/moltenvk.h`) before handing it to the driver. The transform lets Metal compile the shaders efficiently without changing their results.
+
+Two shaders never come from either recompiler. `BloomMaskClampBlob` in `src/gpu/shaders/guest_shaders.cpp` replaces the bloom bright-pass masks `bd_pe_ps_brightpass` and `bd_pe_ps_ms_bright` with hand-written copies in `src/gpu/shaders/hlsl` that clamp the mask to [0, 1], as the Xbox 360's LDR render target did. Those copies are written in XenosRecomp's semantics, so neither `shadergen.toml` nor the MoltenVK transform applies to them.
 
 ## Credits
 

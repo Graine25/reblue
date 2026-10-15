@@ -16,6 +16,8 @@ option(REBLUE_BUILD_INSTALLER "Build the built-in first-run disc installer" ON)
 option(REBLUE_PSO_CAP "Compile in the PSO predictor-miss capture instrument" OFF)
 option(REBLUE_PROFILING "Compile in Tracy zones (never in Release)" ON)
 option(REBLUE_PCH "Precompile the hot shared headers" ON)
+set(REBLUE_SHADERGEN_OVERLAY "${CMAKE_CURRENT_SOURCE_DIR}/shadergen.toml" CACHE FILEPATH
+    "rexglue-shadergen overlay holding reblue's shader semantics (empty for none)")
 
 set(REBLUE_TARGETS reblue)
 set(REBLUE_D3D12_TARGETS "")
@@ -75,6 +77,9 @@ endif()
 option(REBLUE_SHADERGEN
     "Recompile the Xenos shaders with rexglue-shadergen (OFF uses XenosRecomp)"
     ${REBLUE_SHADERGEN_AVAILABLE})
+if(REBLUE_SHADERGEN AND REBLUE_SHADERGEN_OVERLAY AND NOT EXISTS "${REBLUE_SHADERGEN_OVERLAY}")
+    message(FATAL_ERROR "REBLUE_SHADERGEN_OVERLAY (${REBLUE_SHADERGEN_OVERLAY}) does not exist")
+endif()
 add_subdirectory(thirdparty)
 
 foreach(target IN LISTS REBLUE_TARGETS)

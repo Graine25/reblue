@@ -79,10 +79,11 @@ if(REBLUE_SHADERGEN)
     # Fails the build when SharedConstants drifts from the shared block the
     # recompiled shaders read. reblue_common resolves the header's includes.
     rexglue_shadergen_abi_check(reblue_common
-        HEADER  "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/constant_buffers.h"
-        INCLUDE gpu/constant_buffers.h
-        STRUCT  bd::gpu::SharedConstants
-        PROFILE xr-reblue)
+        HEADER   "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/constant_buffers.h"
+        INCLUDE  gpu/constant_buffers.h
+        STRUCT   bd::gpu::SharedConstants
+        PROFILE  xr-reblue
+        OVERLAYS ${REBLUE_SHADERGEN_OVERLAY})
 endif()
 
 # rexglue_setup_target adds the entrypoint sources to whatever target it is

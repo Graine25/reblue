@@ -1,0 +1,59 @@
+# reblue's choices for rexglue-shadergen, merged over its xr-reblue profile when the build
+# recompiles the game's shaders (rexglue_add_shader_cache OVERLAYS, cmake/shader_cache.cmake).
+# Configure with -DREBLUE_SHADERGEN_OVERLAY=<file> to build with another file instead.
+#
+# The values below are the defaults. With them, every float the recompiled shaders compute is the
+# value Xenia computes for the Xbox 360 GPU, bit for bit, on every backend. Each switch can trade
+# that for speed. A relaxed value is what XenosRecomp computes, the recompiler reblue 1.3.1 ships.
+#
+# GPU time of all 142 Blue Dragon shaders, summed, against XenosRecomp's shaders. Measured
+# 2026-10-15 on an Apple M2 with MoltenVK 1.4.3 by rexglue-shadergen's moltenvk_bench. This is
+# shader ALU load, not frame rate: a frame also waits on memory, the CPU and vsync, so the
+# in-game difference is smaller. D3D12 and native Vulkan have not been measured.
+#
+#   these defaults (exact)                      1.16x   pixel shaders 1.19x, vertex 1.10x
+#   alu.denormal_inputs = "host"                1.14x   pixel 1.15x
+#   alu.legacy_mul = "ieee"                     1.06x   pixel 1.05x
+#   both                                        0.98x   pixel 0.94x
+#
+# 1.16x is at the floor: XenosRecomp's own shaders cost 1.17x when Metal compiles them in safe
+# math. Xenos's NaN, infinity and signed-zero rules need safe math, and with it Metal's precise
+# log2, rsqrt, 1/x, sin and cos. src/gpu/shaders/guest_shaders.cpp passes every shader through
+# shadergen's MoltenVK transform, which asks Metal for safe math and removes the rest of what
+# exactness costs there (without it the pixel shaders took 10x XenosRecomp's time).
+#
+# Two shaders are exempt. guest_shaders.cpp's BloomMaskClampBlob replaces bd_pe_ps_brightpass
+# (0xFFDBD782126EB6E8) and bd_pe_ps_ms_bright (0xD386EA2FABF16CE9) with hand-written copies
+# (src/gpu/shaders/hlsl/*_clamp.hlsl) that clamp the bloom mask to [0, 1]. Those copies are written
+# in XenosRecomp's semantics, and neither this file nor the MoltenVK transform applies to them.
+
+[semantics]
+# Denormal operands (magnitude below 2^-126, about 1.2e-38).
+#   "flush": every operand that is a denormal is read as a zero of its sign, as Xenos reads it.
+#   "host":  operands are used as the GPU delivers them. A denormal can then reach the output
+#            instead of a zero. Apple GPUs flush arithmetic themselves, so there only loaded
+#            values (texture and vertex fetches, constants, flat varyings) that are moved or
+#            selected without arithmetic can differ.
+"alu.denormal_inputs" = "flush"
+
+# Products of mul, mad and the dot products.
+#   "xenos": Direct3D 9's legacy rule: zero or a denormal times anything is +0, infinity and NaN
+#            included.
+#   "ieee":  IEEE products, so 0 * infinity is NaN. A shader that relies on the legacy rule (an
+#            unused infinite or NaN term scaled by 0) can then draw NaN pixels.
+"alu.legacy_mul" = "xenos"
+
+# Contraction.
+#   "arith": no product is fused into a multiply-add, so every rounding is Xenos's.
+#   "none":  the GPU compiler may fuse them, which changes results by a rounding.
+# Keep "arith": on MoltenVK the transform keeps the products unfused at no measurable cost.
+"alu.precise_scope" = "arith"
+
+# A switch can also be relaxed for one shader only, by its container key (the hash in
+# shader_cache.cpp and in reblue's "Shader cache miss" log line). For example, bd_mirror_ps costs
+# 1.86x exact and 1.18x with the IEEE multiply:
+#
+# [[override]]
+# hash      = "0x8ADCF394F3205A06"
+# semantics = { "alu.legacy_mul" = "ieee" }
+# note      = "bd_mirror_ps: IEEE products"
